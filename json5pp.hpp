@@ -274,7 +274,6 @@ public:
  */
 class null : public base
 {
-  static constexpr auto context = "null";
 public:
   null() noexcept : base(type_id::null_id) {}
   null(const null& src) noexcept : base(type_id::null_id) {}
@@ -283,22 +282,6 @@ public:
   virtual const null& as_null() const { return *this; }
 public:
   operator bool() const { return false; }
-public:
-  template <typename P>
-  static ptr parse(std::istream& in)
-  {
-    int ch = impl<P>::skip_spaces(in);
-    // ["null"]
-    if ((ch == 'n') && impl<P>::equals(in, 'u', 'l', 'l')) {
-      return std::make_shared<null>();
-    }
-    throw syntax_error(ch, context);
-  }
-  template <typename P>
-  static void stringify(const base& value, std::ostream& out)
-  {
-    out << "null";
-  }
 };  /* class null */
 
 /**
@@ -307,7 +290,6 @@ public:
  */
 class boolean : public base
 {
-  static constexpr auto context = "boolean";
 public:
   explicit boolean(bool value = false) noexcept : base(type_id::boolean_id), value(value) {}
   boolean(const boolean& src) noexcept : base(type_id::boolean_id), value(src.value) {}
@@ -321,29 +303,6 @@ public:
   bool get() const noexcept { return value; }
 private:
   bool value;
-public:
-  template <typename P>
-  static ptr parse(std::istream& in)
-  {
-    int ch = impl<P>::skip_spaces(in);
-    if (ch == 't') {
-      // ["true"]
-      if (impl<P>::equals(in, 'r', 'u', 'e')) {
-        return std::make_shared<boolean>(true);
-      }
-    } else if (ch == 'f') {
-      // ["false"]
-      if (impl<P>::equals(in, 'a', 'l', 's', 'e')) {
-        return std::make_shared<boolean>(false);
-      }
-    }
-    throw syntax_error(ch, context);
-  }
-  template <typename P>
-  static void stringify(const boolean& value, std::ostream& out)
-  {
-    out << (value.value ? "true" : "false");
-  }
 };  /* class boolean */
 
 /**
@@ -352,7 +311,6 @@ public:
  */
 class number : public base
 {
-  static constexpr auto context = "number";
 public:
   explicit number(double value = 0.0) noexcept : base(type_id::number_id), value(value) {}
   number(const number& src) noexcept : base(type_id::number_id), value(src.value) {}
@@ -370,10 +328,142 @@ public:
   int get_as_int() const noexcept { return (int)value; }
 private:
   double value;
+};  /* class number */
+
+/**
+ * @class json5pp::value::string
+ * A class of objects which represent string in JSON.
+ */
+class string : public base, public std::string
+{
 public:
-  template <typename P>
-  static ptr parse(std::istream& in)
+  string() noexcept : base(type_id::string_id) {}
+  string(const std::string& value) noexcept : base(type_id::string_id), std::string(value) {}
+  virtual bool is_string() const noexcept { return true; }
+  virtual string& as_string() { return *this; }
+  virtual const string& as_string() const { return *this; }
+public:
+  string& operator =(const std::string& value) noexcept { set(value); return *this; }
+  void set(const std::string& value) noexcept { this->value = value; }
+  operator const std::string&() const noexcept { return get(); }
+  const std::string& get() const noexcept { return this->value; }
+  operator const char *() const noexcept { return get().c_str(); }
+private:
+  std::string value;
+};  /* class string */
+
+/**
+ * @class json5pp::value::array
+ * A class of objects which represent array in JSON.
+ */
+class array : public base, public std::vector<ptr>
+{
+public:
+  using container_t = typename std::vector<ptr>;
+  array() noexcept : base(type_id::array_id) {}
+  array(const container_t& values) noexcept : base(type_id::array_id), container_t(values) {}
+  array(const array& src) noexcept : base(type_id::array_id), container_t(src) {}
+  virtual bool is_array() const noexcept { return true; }
+  virtual array& as_array() { return *this; }
+  virtual const array& as_array() const { return *this; }
+};  /* class array */
+
+/**
+ * @class json5pp::value::object
+ * A class of objects which represent object in JSON.
+ */
+class object : public base, public std::map<std::string, ptr>
+{
+public:
+  using key_t = std::string;
+  using container_t = typename std::map<key_t, ptr>;
+  object() noexcept : base(type_id::object_id) {}
+  object(const container_t& values) noexcept : base(type_id::object_id), container_t(values) {}
+  object(const object& src) noexcept : base(type_id::object_id), container_t(src) {}
+  virtual bool is_object() const noexcept { return true; }
+  virtual object& as_object() { return *this; }
+  virtual const object& as_object() const { return *this; }
+};  /* class object */
+
+template <typename P>
+struct impl
+{
+  friend class value::base;
+  friend class value::null;
+  friend class value::boolean;
+  friend class value::number;
+  friend class value::string;
+  friend class value::array;
+  friend class value::object;
+  friend value::ptr parse(std::istream& in);
+
+  static ptr parse(std::istream& in, const char *context)
   {
+    int ch = skip_spaces(in);
+    in.unget();
+
+    // [value]
+    switch (ch) {
+    case '{':
+      // [object]
+      return parse_object(in);
+    case '[':
+      // [array]
+      return parse_array(in);
+    case '"':
+    case '\'':
+      // [string]
+      return parse_string(in);
+    case 'n':
+      // ["null"]?
+      return parse_null(in);
+    case 't':
+    case 'f':
+      // ["true"] or ["false"]?
+      return parse_boolean(in);
+    default:
+      if (is_digit(ch) || (ch == '-') ||
+          (P::allow_explicit_plus_sign && ch == '+') ||
+          (P::allow_leading_decimal_point && ch == '.')) {
+        // [number]?
+        return parse_number(in);
+      }
+      throw syntax_error(ch, context);
+    }
+  }
+
+  static ptr parse_null(std::istream& in)
+  {
+    static const char context[] = "null";
+    int ch = skip_spaces(in);
+    // ["null"]
+    if ((ch == 'n') && equals(in, 'u', 'l', 'l')) {
+      return std::make_shared<null>();
+    }
+    throw syntax_error(ch, context);
+  }
+
+  static ptr parse_boolean(std::istream& in)
+  {
+    static const char context[] = "boolean";
+    int ch = skip_spaces(in);
+    if (ch == 't') {
+      // ["true"]
+      if (equals(in, 'r', 'u', 'e')) {
+        return std::make_shared<boolean>(true);
+      }
+    } else if (ch == 'f') {
+      // ["false"]
+      if (equals(in, 'a', 'l', 's', 'e')) {
+        return std::make_shared<boolean>(false);
+      }
+    }
+    throw syntax_error(ch, context);
+  }
+
+  static ptr parse_number(std::istream& in)
+  {
+    static const char context[] = "number";
     unsigned long long int_part = 0;
     unsigned long long frac_part = 0;
     int frac_divs = 0;
@@ -381,7 +471,7 @@ public:
     bool exp_negative = false;
     bool negative = false;
 
-    int ch = impl<P>::skip_spaces(in);
+    int ch = skip_spaces(in);
     // [int]
     if (ch == '-') {
       negative = true;
@@ -395,12 +485,12 @@ public:
         // ["0"]
         ch = in.get();
         break;
-      } else if (impl<P>::is_digit(ch)) {
+      } else if (is_digit(ch)) {
         // [onenine]
-        int_part = impl<P>::to_number(ch);
-        for (; ch = in.get(), impl<P>::is_digit(ch);) {
+        int_part = to_number(ch);
+        for (; ch = in.get(), is_digit(ch);) {
           int_part *= 10;
-          int_part += impl<P>::to_number(ch);
+          int_part += to_number(ch);
         }
         break;
       } else if ((P::allow_leading_decimal_point) && (ch == '.')) {
@@ -408,7 +498,7 @@ public:
         break;
       } else if ((P::allow_infinity) && (ch == 'i')) {
         // ["infinity"] (JSON5)
-        if (impl<P>::equals(in, 'n', 'f', 'i', 'n', 'i', 't', 'y')) {
+        if (equals(in, 'n', 'f', 'i', 'n', 'i', 't', 'y')) {
           return std::make_shared<number>(negative ?
             -std::numeric_limits<double>::infinity() :
             +std::numeric_limits<double>::infinity()
@@ -416,7 +506,7 @@ public:
         }
       } else if ((P::allow_nan) && (ch == 'N')) {
         // ["NaN"] (JSON5)
-        if (impl<P>::equals(in, 'a', 'N')) {
+        if (equals(in, 'a', 'N')) {
           return std::make_shared<number>(std::numeric_limits<double>::quiet_NaN());
         }
       }
@@ -424,9 +514,9 @@ public:
     }
     if (ch == '.') {
       // [frac]
-      for (; ch = in.get(), impl<P>::is_digit(ch); ++frac_divs) {
+      for (; ch = in.get(), is_digit(ch); ++frac_divs) {
         frac_part *= 10;
-        frac_part += impl<P>::to_number(ch);
+        frac_part += to_number(ch);
       }
       if ((!P::allow_trailing_decimal_point) && (frac_divs == 0)) {
         throw syntax_error(ch, context);
@@ -444,9 +534,9 @@ public:
         break;
       }
       bool no_digit = true;
-      for (; impl<P>::is_digit(ch); no_digit = false, ch = in.get()) {
+      for (; is_digit(ch); no_digit = false, ch = in.get()) {
         exp_part *= 10;
-        exp_part += impl<P>::to_number(ch);
+        exp_part += to_number(ch);
       }
       if (no_digit) {
         throw syntax_error(ch, context);
@@ -463,57 +553,9 @@ public:
     return std::make_shared<number>(negative ? -value : +value);
   }
 
-  template <typename P>
-  static void stringify(const number& value, std::ostream& out)
+  static void parse_string(std::istream& in, std::string& buffer, const char *context)
   {
-    if (std::isinf(value.value)) {
-      if (P::allow_infinity) {
-        if (value.value < 0) {
-          out << "-";
-        }
-        out << "infinity";
-      } else {
-        null::stringify<P>(value, out);
-      }
-      return;
-    } else if (std::isnan(value.value)) {
-      if (P::allow_nan) {
-        out << "NaN";
-      } else {
-        null::stringify<P>(value, out);
-      }
-      return;
-    }
-    out << value.value;
-  }
-};  /* class number */
-
-/**
- * @class json5pp::value::string
- * A class of objects which represent string in JSON.
- */
-class string : public base, public std::string
-{
-  static constexpr auto context = "string";
-public:
-  string() noexcept : base(type_id::string_id) {}
-  string(const std::string& value) noexcept : base(type_id::string_id), std::string(value) {}
-  virtual bool is_string() const noexcept { return true; }
-  virtual string& as_string() { return *this; }
-  virtual const string& as_string() const { return *this; }
-public:
-  string& operator =(const std::string& value) noexcept { set(value); return *this; }
-  void set(const std::string& value) noexcept { this->value = value; }
-  operator const std::string&() const noexcept { return get(); }
-  const std::string& get() const noexcept { return this->value; }
-  operator const char *() const noexcept { return get().c_str(); }
-private:
-  std::string value;
-public:
-  template <typename P>
-  static void parse(std::istream& in, std::string& buffer)
-  {
-    int quote = impl<P>::skip_spaces(in);
+    int quote = skip_spaces(in);
     if ((quote != '"') && ((!P::allow_single_quote) || (quote != '\''))) {
       throw syntax_error((char)quote, context);
     }
@@ -558,7 +600,7 @@ public:
             char16_t code = 0;
             for (int i = 0; i < 4; ++i) {
               ch = in.get();
-              int n = impl<P>::to_number_hex(ch);
+              int n = to_number_hex(ch);
               if (n < 0) {
                 throw syntax_error(ch, context);
               }
@@ -598,18 +640,187 @@ public:
     }
   }
 
-  template <typename P>
-  static ptr parse(std::istream& in)
+  static ptr parse_string(std::istream& in)
   {
+    static const char context[] = "string";
     std::string buffer;
-    parse<P>(in, buffer);
+    parse_string(in, buffer, context);
     return std::make_shared<string>(buffer);
   }
 
-  template <typename P>
-  static void stringify(const std::string& value, std::ostream& out)
+  static ptr parse_array(std::istream& in)
   {
-    static const auto hex = "0123456789abcdef";
+    static const char context[] = "array";
+    int ch = skip_spaces(in);
+    if (ch != '[') {
+      throw syntax_error(ch, context);
+    }
+    array::container_t values;
+    for (;;) {
+      ch = skip_spaces(in);
+      if (ch == ']') {
+        break;
+      }
+      if (values.empty()) {
+        in.unget();
+      } else if (ch != ',') {
+        throw syntax_error(ch, context);
+      } else if (P::allow_trailing_comma) {
+        ch = in.get();
+        if (ch == ']') {
+          break;
+        }
+        in.unget();
+      }
+      // [value]
+      values.push_back(parse(in, context));
+    }
+    return std::make_shared<array>(values);
+  }
+
+  static std::string parse_key(std::istream& in)
+  {
+    static const char context[] = "object-key";
+    std::string buffer;
+    if (P::allow_unquoted_key) {
+      int ch = skip_spaces(in);
+      if ((ch != '"') && (ch != '\'')) {
+        for (;; ch = in.get()) {
+          if ((ch == '_') || (ch == '$') || (is_alpha(ch))) {
+            // [IdentifierStart]
+          } else if (is_digit(ch) && (!buffer.empty())) {
+            // [UnicodeDigit]
+          } else if (ch == ':') {
+            break;
+          } else {
+            throw syntax_error(ch, context);
+          }
+          buffer.append(1, ch);
+        }
+        in.unget();
+        return buffer;
+      }
+      in.unget();
+    }
+    parse_string(in, buffer, context);
+    return buffer;
+  }
+
+  static ptr parse_object(std::istream& in)
+  {
+    static const char context[] = "object";
+    int ch = skip_spaces(in);
+    if (ch != '{') {
+      throw syntax_error(ch, context);
+    }
+    object::container_t values;
+    for (;;) {
+      ch = skip_spaces(in);
+      if (ch == '}') {
+        break;
+      }
+      if (values.empty()) {
+        in.unget();
+      } else if (ch != ',') {
+        throw syntax_error(ch, context);
+      } else if (P::allow_trailing_comma) {
+        ch = in.get();
+        if (ch == '}') {
+          break;
+        }
+        in.unget();
+      }
+      // [string]
+      // [key] (JSON5)
+      const std::string key = parse_key(in);
+      ch = skip_spaces(in);
+      if (ch != ':') {
+        throw syntax_error(ch, context);
+      }
+      // [value]
+      values.emplace(key, parse(in, context));
+    }
+    return std::make_shared<object>(values);
+  }
+
+  static void stringify(const base& value, std::ostream& out)
+  {
+    switch (value.type_id) {
+    case type_id::null_id:
+      return stringify_null(out);
+    case type_id::boolean_id:
+      return stringify_boolean(value.as_boolean(), out);
+    case type_id::number_id:
+      return stringify_number(value.as_number(), out);
+    case type_id::string_id:
+      return stringify_string(value.as_string(), out);
+    case type_id::array_id:
+      return stringify_array(value.as_array(), out);
+    case type_id::object_id:
+      return stringify_object(value.as_object(), out);
+    default:
+      throw std::invalid_argument("unexpected JSON value");
+    }
+  }
+
+  template <typename I>
+  static void stringify(const base& value, std::ostream& out, const I& indent)
+  {
+    switch (value.type_id) {
+    case type_id::null_id:
+      return stringify_null(out);
+    case type_id::boolean_id:
+      return stringify_boolean(value.as_boolean(), out);
+    case type_id::number_id:
+      return stringify_number(value.as_number(), out);
+    case type_id::string_id:
+      return stringify_string(value.as_string(), out);
+    case type_id::array_id:
+      return stringify_array<I>(value.as_array(), out, indent);
+    case type_id::object_id:
+      return stringify_object<I>(value.as_object(), out, indent);
+    default:
+      throw std::invalid_argument("unexpected JSON value");
+    }
+  }
+
+  static void stringify_null(std::ostream& out)
+  {
+    out << "null";
+  }
+
+  static void stringify_boolean(const boolean& value, std::ostream& out)
+  {
+    out << (value.get() ? "true" : "false");
+  }
+
+  static void stringify_number(const number& value, std::ostream& out)
+  {
+    auto n = value.get();
+    if (std::isinf(n)) {
+      if (P::allow_infinity) {
+        if (n < 0) {
+          out << "-";
+        }
+        out << "infinity";
+      } else {
+        stringify_null(out);
+      }
+      return;
+    } else if (std::isnan(n)) {
+      if (P::allow_nan) {
+        out << "NaN";
+      } else {
+        stringify_null(out);
+      }
+      return;
+    }
+    out << n;
+  }
+
+  static void stringify_string(const std::string& value, std::ostream& out)
+  {
+    static const char hex[] = "0123456789abcdef";
     out << '"';
     for (const auto& i : value) {
       unsigned char ch = i;
@@ -637,56 +848,8 @@ public:
     }
     out << '"';
   }
-};  /* class string */
 
-/**
- * @class json5pp::value::array
- * A class of objects which represent array in JSON.
- */
-class array : public base, public std::vector<ptr>
-{
-  static constexpr auto context = "array";
-public:
-  using container_t = typename std::vector<ptr>;
-  array() noexcept : base(type_id::array_id) {}
-  array(const container_t& values) noexcept : base(type_id::array_id), container_t(values) {}
-  array(const array& src) noexcept : base(type_id::array_id), container_t(src) {}
-  virtual bool is_array() const noexcept { return true; }
-  virtual array& as_array() { return *this; }
-  virtual const array& as_array() const { return *this; }
-public:
-  template <typename P>
-  static ptr parse(std::istream& in)
-  {
-    int ch = impl<P>::skip_spaces(in);
-    if (ch != '[') {
-      throw syntax_error(ch, context);
-    }
-    container_t values;
-    for (;;) {
-      ch = impl<P>::skip_spaces(in);
-      if (ch == ']') {
-        break;
-      }
-      if (values.empty()) {
-        in.unget();
-      } else if (ch != ',') {
-        throw syntax_error(ch, context);
-      } else if (P::allow_trailing_comma) {
-        ch = in.get();
-        if (ch == ']') {
-          break;
-        }
-        in.unget();
-      }
-      // [value]
-      values.push_back(value::impl<P>::parse(in));
-    }
-    return std::make_shared<array>(values);
-  }
-
-  template <typename P>
-  static void stringify(const array& value, std::ostream& out)
+  static void stringify_array(const array& value, std::ostream& out)
   {
     out << "[";
     bool comma = false;
@@ -694,111 +857,27 @@ public:
       if (comma) {
         out << ",";
       }
-      i->stringify<P>(out);
+      stringify(*i.get(), out);
       comma = true;
     }
     out << "]";
   }
 
-  template <typename P, typename I>
-  static void stringify(const array& value, std::ostream& out, const I& indent)
+  template <typename I>
+  static void stringify_array(const array& value, std::ostream& out, const I& indent)
   {
     out << "[";
     bool comma = false;
     auto indent_inner = indent.inner();
     for (const auto& i : value) {
       out << (comma ? ",\n" : "\n") << indent_inner.get();
-      i->stringify<P, I>(out, indent_inner);
+      stringify<I>(*i.get(), out, indent_inner);
       comma = true;
     }
     out << "\n" << indent.get() << "]";
   }
-};  /* class array */
 
-/**
- * @class json5pp::value::object
- * A class of objects which represent object in JSON.
- */
-class object : public base, public std::map<std::string, ptr>
-{
-  static constexpr auto context = "object";
-public:
-  using key_t = std::string;
-  using container_t = typename std::map<key_t, ptr>;
-  object() noexcept : base(type_id::object_id) {}
-  object(const container_t& values) noexcept : base(type_id::object_id), container_t(values) {}
-  object(const object& src) noexcept : base(type_id::object_id), container_t(src) {}
-  virtual bool is_object() const noexcept { return true; }
-  virtual object& as_object() { return *this; }
-  virtual const object& as_object() const { return *this; }
-private:
-  template <typename P>
-  static std::string parse_key(std::istream& in)
-  {
-    std::string buffer;
-    if (P::allow_unquoted_key) {
-      int ch = impl<P>::skip_spaces(in);
-      if ((ch != '"') && (ch != '\'')) {
-        for (;; ch = in.get()) {
-          if ((ch == '_') || (ch == '$') || (impl<P>::is_alpha(ch))) {
-            // [IdentifierStart]
-          } else if (impl<P>::is_digit(ch) && (!buffer.empty())) {
-            // [UnicodeDigit]
-          } else if (ch == ':') {
-            break;
-          } else {
-            throw syntax_error(ch, context);
-          }
-          buffer.append(1, ch);
-        }
-        in.unget();
-        return buffer;
-      }
-      in.unget();
-    }
-    string::parse<P>(in, buffer);
-    return buffer;
-  }
-public:
-  template <typename P>
-  static ptr parse(std::istream& in)
-  {
-    int ch = impl<P>::skip_spaces(in);
-    if (ch != '{') {
-      throw syntax_error(ch, context);
-    }
-    object::container_t values;
-    for (;;) {
-      ch = impl<P>::skip_spaces(in);
-      if (ch == '}') {
-        break;
-      }
-      if (values.empty()) {
-        in.unget();
-      } else if (ch != ',') {
-        throw syntax_error(ch, context);
-      } else if (P::allow_trailing_comma) {
-        ch = in.get();
-        if (ch == '}') {
-          break;
-        }
-        in.unget();
-      }
-      // [string]
-      // [key] (JSON5)
-      const std::string key = parse_key<P>(in);
-      ch = impl<P>::skip_spaces(in);
-      if (ch != ':') {
-        throw syntax_error(ch, context);
-      }
-      // [value]
-      values.emplace(key, value::impl<P>::parse(in));
-    }
-    return std::make_shared<object>(values);
-  }
-
-  template <typename P>
-  static void stringify(const object& value, std::ostream& out)
+  static void stringify_object(const object& value, std::ostream& out)
   {
     out << "{";
     bool comma = false;
@@ -806,112 +885,28 @@ public:
       if (comma) {
         out << ",";
       }
-      string::stringify<P>(i.first, out);
+      stringify_string(i.first, out);
       out << ":";
-      i.second->stringify<P>(out);
+      stringify(*i.second.get(), out);
       comma = true;
     }
     out << "}";
   }
 
-  template <typename P, typename I>
-  static void stringify(const object& value, std::ostream& out, const I& indent)
+  template <typename I>
+  static void stringify_object(const object& value, std::ostream& out, const I& indent)
   {
     out << "{";
     bool comma = false;
     auto indent_inner = indent.inner();
     for (const auto& i : value) {
       out << (comma ? ",\n" : "\n") << indent_inner.get();
-      string::stringify<P>(i.first, out);
+      stringify_string(i.first, out);
       out << ": ";
-      i.second->stringify<P, I>(out, indent_inner);
+      stringify<I>(*i.second.get(), out, indent_inner);
       comma = true;
     }
     out << "\n" << indent.get() << "}";
-  }
-};  /* class object */
-
-template <typename P>
-struct impl
-{
-  friend class value::base;
-  friend class value::null;
-  friend class value::boolean;
-  friend class value::number;
-  friend class value::string;
-  friend class value::array;
-  friend class value::object;
-  friend value::ptr parse(std::istream& in);
-
-  static ptr parse(std::istream& in)
-  {
-    int ch = skip_spaces(in);
-    in.unget();
-
-    // [value]
-    switch (ch) {
-    case '{':
-      // [object]
-      return object::parse<P>(in);
-    case '[':
-      // [array]
-      return array::parse<P>(in);
-    case '"':
-    case '\'':
-      // [string]
-      return string::parse<P>(in);
-    case 'n':
-      // ["null"]?
-      return null::parse<P>(in);
-    case 't':
-    case 'f':
-      // ["true"] or ["false"]?
-      return boolean::parse<P>(in);
-    default:
-      // [number]?
-      return number::parse<P>(in);
-    }
-  }
-
-  static void stringify(const base& value, std::ostream& out)
-  {
-    switch (value.type_id) {
-    case type_id::null_id:
-      return value::null::stringify<P>(value.as_null(), out);
-    case type_id::boolean_id:
-      return value::boolean::stringify<P>(value.as_boolean(), out);
-    case type_id::number_id:
-      return value::number::stringify<P>(value.as_number(), out);
-    case type_id::string_id:
-      return value::string::stringify<P>(value.as_string(), out);
-    case type_id::array_id:
-      return value::array::stringify<P>(value.as_array(), out);
-    case type_id::object_id:
-      return value::object::stringify<P>(value.as_object(), out);
-    default:
-      throw std::invalid_argument("unexpected JSON value");
-    }
-  }
-
-  template <typename I>
-  static void stringify(const base& value, std::ostream& out, const I& indent)
-  {
-    switch (value.type_id) {
-    case type_id::null_id:
-      return value::null::stringify<P>(value.as_null(), out);
-    case type_id::boolean_id:
-      return value::boolean::stringify<P>(value.as_boolean(), out);
-    case type_id::number_id:
-      return value::number::stringify<P>(value.as_number(), out);
-    case type_id::string_id:
-      return value::string::stringify<P>(value.as_string(), out);
-    case type_id::array_id:
-      return value::array::stringify<P, I>(value.as_array(), out, indent);
-    case type_id::object_id:
-      return value::object::stringify<P, I>(value.as_object(), out, indent);
-    default:
-      throw std::invalid_argument("unexpected JSON value");
-    }
   }
 
   static int skip_spaces(std::istream& in)
@@ -1014,7 +1009,7 @@ struct impl
 template <typename P = policy::ecma404>
 value::ptr parse(std::istream& in, const bool finish = true)
 {
-  const auto result = value::impl<P>::parse(in);
+  const auto result = value::impl<P>::parse(in, "JSON");
   if (finish) {
     const auto ch = value::impl<P>::skip_spaces(in);
     if (ch != std::char_traits<char>::eof()) {
