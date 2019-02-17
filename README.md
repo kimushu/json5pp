@@ -48,13 +48,14 @@ JSON (ECMA-404 and JSON5) parser &amp; stringifier for C++11.
       * If `true`, parse will fail when junk data after JSON value. This is the default.
       * If `false`, parse will succeed after reading the first JSON value. This is useful for reading JSON as streaming data.
     * Returns `json5pp::value::ptr`
-  * `json5pp::parse<P>(const std::string& str, const bool finish = true)`
+  * `json5pp::parse<P>(const std::string& str)`
     * Parse JSON from a string.
     * Returns `json5pp::value::ptr`
   * `json5pp::parse5(std::istream& in, const bool finish = true)`
     * Parse JSON5 from an input stream.
+    * About `finish` parameter, see description for `json5pp::parse<P>(std::istream& in, ...)`
     * Returns `json5pp::value::ptr`
-  * `json5pp::parse5(const std::string& str, const bool finish = true)`
+  * `json5pp::parse5(const std::string& str)`
     * Parse JSON5 from a string.
     * Returns `json5pp::value::ptr`
 * stringify
