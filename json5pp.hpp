@@ -171,7 +171,7 @@ class string;
 class array;
 class object;
 using ptr = typename std::shared_ptr<base>;
-template <typename P> class impl;
+template <typename P> struct impl;
 
 enum type_id {
   null_id,
