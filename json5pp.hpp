@@ -12,6 +12,7 @@
 #include <limits>
 #include <map>
 #include <cmath>
+#include <iomanip>
 
 namespace json5pp {
 
@@ -1011,31 +1012,33 @@ struct impl
 } /* namespace value */
 
 template <typename P = policy::ecma404>
-value::ptr parse(std::istream& in)
+value::ptr parse(std::istream& in, const bool finish = true)
 {
   const auto result = value::impl<P>::parse(in);
-  const auto ch = value::impl<P>::skip_spaces(in);
-  if (ch != std::char_traits<char>::eof()) {
-    throw syntax_error(ch, "JSON");
+  if (finish) {
+    const auto ch = value::impl<P>::skip_spaces(in);
+    if (ch != std::char_traits<char>::eof()) {
+      throw syntax_error(ch, "JSON");
+    }
   }
   return result;
 }
 
 template <typename P = policy::ecma404>
-value::ptr parse(const std::string& str)
+value::ptr parse(const std::string& str, const bool finish = true)
 {
   std::istringstream in(str);
-  return parse<P>(in);
+  return parse<P>(in, finish);
 }
 
-static value::ptr parse5(std::istream& in)
+static value::ptr parse5(std::istream& in, const bool finish = true)
 {
-  return parse<policy::json5>(in);
+  return parse<policy::json5>(in, finish);
 }
 
-static value::ptr parse5(const std::string& str)
+static value::ptr parse5(const std::string& str, const bool finish = true)
 {
-  return parse<policy::json5>(str);
+  return parse<policy::json5>(str, finish);
 }
 
 } /* namespace json */

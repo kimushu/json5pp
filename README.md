@@ -41,17 +41,20 @@ JSON (ECMA-404 and JSON5) parser &amp; stringifier for C++11.
 ### Functions
 
 * parse
-  * `json5pp::parse<P>(std::istream& in)`
+  * `json5pp::parse<P>(std::istream& in, const bool finish = true)`
     * Parse JSON from an input stream.
     * Template parameter `P` specifies parsing rule. If omitted, rules for standard JSON will be used.
+    * `finish` indicates that the stream should be finished after JSON data.
+      * If `true`, parse will fail when junk data after JSON value. This is the default.
+      * If `false`, parse will succeed after reading the first JSON value. This is useful for reading JSON as streaming data.
     * Returns `json5pp::value::ptr`
-  * `json5pp::parse<P>(const std::string& str)`
+  * `json5pp::parse<P>(const std::string& str, const bool finish = true)`
     * Parse JSON from a string.
     * Returns `json5pp::value::ptr`
-  * `json5pp::parse5(std::istream& in)`
+  * `json5pp::parse5(std::istream& in, const bool finish = true)`
     * Parse JSON5 from an input stream.
     * Returns `json5pp::value::ptr`
-  * `json5pp::parse5(const std::string& str)`
+  * `json5pp::parse5(const std::string& str, const bool finish = true)`
     * Parse JSON5 from a string.
     * Returns `json5pp::value::ptr`
 * stringify
@@ -134,3 +137,4 @@ void save_to_json5_with_indents(const json5pp::value::base& value, const std::st
 ## ToDo
 
 * More tests
+* Add support `operator <<` for stringify
