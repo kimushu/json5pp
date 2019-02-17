@@ -1025,10 +1025,10 @@ value::ptr parse(std::istream& in, const bool finish = true)
 }
 
 template <typename P = policy::ecma404>
-value::ptr parse(const std::string& str, const bool finish = true)
+value::ptr parse(const std::string& str)
 {
   std::istringstream in(str);
-  return parse<P>(in, finish);
+  return parse<P>(in);
 }
 
 static value::ptr parse5(std::istream& in, const bool finish = true)
@@ -1036,9 +1036,9 @@ static value::ptr parse5(std::istream& in, const bool finish = true)
   return parse<policy::json5>(in, finish);
 }
 
-static value::ptr parse5(const std::string& str, const bool finish = true)
+static value::ptr parse5(const std::string& str)
 {
-  return parse<policy::json5>(str, finish);
+  return parse<policy::json5>(str);
 }
 
 } /* namespace json */
