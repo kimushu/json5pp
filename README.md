@@ -75,13 +75,13 @@ JSON (ECMA-404 and JSON5) parser &amp; stringifier for C++11.
   * `json5pp::base::stringify5()`
     * Stringify value to JSON5 as a string without indents.
     * Returns `std::string`
-  * `json5pp::base::stringify5(std::ostream& out)`
+  * `json5pp::base::stringify5_to(std::ostream& out)`
     * Stringify value to JSON5 via an output stream without indents.
     * Returns `void`
   * `json5pp::base::stringify5<I>(const I& indent)`
     * Stringify value to JSON5 as a string with indents specified by `indent`.
     * Returns `std::string`
-  * `json5pp::base::stringify5<I>(std::ostream& out, const I& indent)`
+  * `json5pp::base::stringify5_to<I>(std::ostream& out, const I& indent)`
     * Stringify value to JSON5 via an output stream with indents specified by `indent`.
     * Returns `void`
 
@@ -109,25 +109,25 @@ void load_from_json5(const std::string& filename)
 void save_to_json(const json5pp::value::base& value, const std::string& filename)
 {
   std::ofstream f(filename);
-  value.stringify(f);
+  value.stringify_to(f);
 }
 
 void save_to_json5(const json5pp::value::base& value, const std::string& filename)
 {
   std::ofstream f(filename);
-  value.stringify5(f);
+  value.stringify5_to(f);
 }
 
 void save_to_json_with_indents(const json5pp::value::base& value, const std::string& filename)
 {
   std::ofstream f(filename);
-  value.stringify(f, json5pp::indent::spaces<2>());
+  value.stringify_to(f, json5pp::indent::spaces<2>());
 }
 
 void save_to_json5_with_indents(const json5pp::value::base& value, const std::string& filename)
 {
   std::ofstream f(filename);
-  value.stringify5(f, json5pp::indent::spaces<2>());
+  value.stringify5_to(f, json5pp::indent::spaces<2>());
 }
 ```
 
