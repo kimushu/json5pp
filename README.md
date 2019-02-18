@@ -63,13 +63,13 @@ JSON (ECMA-404 and JSON5) parser &amp; stringifier for C++11.
     * Stringify value to JSON as a string without indents.
     * Template parameter `P` specifies stringify rule. If omitted, rules for standard JSON will be used.
     * Returns `std::string`
-  * `json5pp::base::stringify<P>(std::ostream& out)`
+  * `json5pp::base::stringify_to<P>(std::ostream& out)`
     * Stringify value to JSON via an output stream without indents.
     * Returns `void`
   * `json5pp::base::stringify<P, I>(const I& indent)`
     * Stringify value to JSON as a string with indents specified by `indent`.
     * Returns `std::string`
-  * `json5pp::base::stringify<P, I>(std::ostream& out, const I& indent)`
+  * `json5pp::base::stringify_to<P, I>(std::ostream& out, const I& indent)`
     * Stringify value to JSON via an output stream with indents specified by `indent`.
     * Returns `void`
   * `json5pp::base::stringify5()`
@@ -134,6 +134,7 @@ void save_to_json5_with_indents(const json5pp::value::base& value, const std::st
 ## Limitation
 
 * Not fully compatible with unquoted keys in JSON5 (Some unicode will be rejected as keys)
+* All strings are assumed to be stored in UTF-8 encoding.
 
 ## ToDo
 

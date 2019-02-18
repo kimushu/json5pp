@@ -218,7 +218,7 @@ public:
   virtual const object& as_object() const { throw std::bad_cast(); }
 public:
   template <typename P = policy::ecma404>
-  void stringify(std::ostream& out) const
+  void stringify_to(std::ostream& out) const
   {
     value::impl<P>::stringify(*this, out);
   }
@@ -232,7 +232,7 @@ public:
   }
 
   template <typename P = policy::ecma404, typename I>
-  void stringify(std::ostream& out, const I& indent) const
+  void stringify_to(std::ostream& out, const I& indent) const
   {
     value::impl<P>::stringify(*this, out, indent);
   }
@@ -245,9 +245,9 @@ public:
     return out.str();
   }
 
-  void stringify5(std::ostream& out) const
+  void stringify5_to(std::ostream& out) const
   {
-    this->stringify<policy::json5>(out);
+    this->stringify_to<policy::json5>(out);
   }
 
   std::string stringify5() const
@@ -256,9 +256,9 @@ public:
   }
 
   template <typename I>
-  void stringify5(std::ostream& out, const I& indent) const
+  void stringify5_to(std::ostream& out, const I& indent) const
   {
-    this->stringify<policy::json5, I>(out, indent);
+    this->stringify_to<policy::json5, I>(out, indent);
   }
 
   template <typename I>
