@@ -16,6 +16,16 @@
 
 namespace json5pp {
 
+/*
+ * json5pp uses semantic versioning
+ * See: https://semver.org/
+ */
+namespace version {
+  static constexpr auto major = 1;
+  static constexpr auto minor = 1;
+  static constexpr auto patch = 0;
+}
+
 /**
  * @class syntax_error
  * A class of objects thrown as exceptions to report a JSON syntax error.
