@@ -3,16 +3,21 @@
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
+#include <sstream>
 #include <iostream>
+
+void exec(std::ostream& out);
 
 int main(int argc, char *argv[])
 {
-  if (argc != 2) {
+  if ((argc != 2) && (argc != 3)) {
     std::cerr << "This program should be invoked from Makefile!" << std::endl;
     std::exit(1);
   }
 
-  std::cout << "  \"" << argv[1] << "\":\n    ";
+  std::string source(argv[1]);
+  source.replace(source.size() - 4, 4, "cpp");
+  std::cout << "  \"" << source << "\":\n    ";
 
   std::thread([]{
     std::this_thread::sleep_for(std::chrono::seconds(TIMEOUT));
@@ -21,12 +26,14 @@ int main(int argc, char *argv[])
   }).detach();
 
   try {
-    std::ifstream in(argv[1], std::ios::binary);
-    json5pp::PARSE_METHOD(in);
-    std::cout << "\"[FAIL] unexpected success.\"," << std::endl;
-    std::exit(1);
-  } catch (const json5pp::syntax_error& e) {
-    std::cout << "\"[PASS] parse failed expectedly.\"," << std::endl;
+    if (argc == 3) {
+      std::ofstream out(argv[2], std::ios::binary);
+      exec(out);
+    } else {
+      std::ostringstream out;
+      exec(out);
+    }
+    std::cout << "\"[PASS] execution succeeded.\"," << std::endl;
     std::exit(0);
   } catch (const std::exception& e) {
     std::cout << "\"[FAIL] unexpected error: " << e.what() << "\"," << std::endl;

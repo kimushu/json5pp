@@ -1,4 +1,4 @@
-#include "../json5pp.hpp"
+#include <json5pp.hpp>
 #include <thread>
 #include <chrono>
 #include <cstdlib>

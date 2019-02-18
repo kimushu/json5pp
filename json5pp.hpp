@@ -857,7 +857,11 @@ struct impl
       if (comma) {
         out << ",";
       }
-      stringify(*i.get(), out);
+      if (i) {
+        stringify(*i.get(), out);
+      } else {
+        stringify_null(out);
+      }
       comma = true;
     }
     out << "]";
@@ -871,7 +875,11 @@ struct impl
     auto indent_inner = indent.inner();
     for (const auto& i : value) {
       out << (comma ? ",\n" : "\n") << indent_inner.get();
-      stringify<I>(*i.get(), out, indent_inner);
+      if (i) {
+        stringify<I>(*i.get(), out, indent_inner);
+      } else {
+        stringify_null(out);
+      }
       comma = true;
     }
     out << "\n" << indent.get() << "]";
@@ -887,7 +895,11 @@ struct impl
       }
       stringify_string(i.first, out);
       out << ":";
-      stringify(*i.second.get(), out);
+      if (i.second) {
+        stringify(*i.second.get(), out);
+      } else {
+        stringify_null(out);
+      }
       comma = true;
     }
     out << "}";
@@ -903,7 +915,11 @@ struct impl
       out << (comma ? ",\n" : "\n") << indent_inner.get();
       stringify_string(i.first, out);
       out << ": ";
-      stringify<I>(*i.second.get(), out, indent_inner);
+      if (i.second) {
+        stringify<I>(*i.second.get(), out, indent_inner);
+      } else {
+        stringify_null(out);
+      }
       comma = true;
     }
     out << "\n" << indent.get() << "}";

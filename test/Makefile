@@ -1,6 +1,6 @@
 TARGET = json5pp-test
 CXX = g++
-CXXFLAGS = -std=c++11 -s -O2
+CXXFLAGS = -I.. -std=c++11 -s -O2
 TIMEOUT = 5
 
 ifeq ($(OS),Windows_NT)
@@ -11,7 +11,7 @@ endif
 
 Q ?= @
 DUT = ../json5pp.hpp
-CASES := $(sort $(wildcard input/*.json))
+CASES := $(sort $(wildcard input/*.json) $(wildcard input/*.cpp))
 LOG = result.json
 
 .PHONY: all
@@ -45,8 +45,13 @@ output/pass5_%.$(SUFFIX): input/pass5_%.hpp pass.cpp $(DUT)
 	@echo "// Compiling $@ ..."
 	$(Q)$(BUILD) -include $< -DPARSE_METHOD=parse5
 
-$(LOG): output/fail.$(SUFFIX) output/fail5.$(SUFFIX) $(CASES) \
-	$(patsubst input/%.json,output/%.$(SUFFIX),$(filter input/pass%,$(CASES)))
+output/exec_%.$(SUFFIX): input/exec_%.cpp exec.cpp $(DUT)
+	@echo "// Compiling $@ ..."
+	$(Q)$(BUILD)
+
+$(LOG): output/fail.$(SUFFIX) output/fail5.$(SUFFIX) $(filter %.json,$(CASES)) \
+	$(patsubst input/%.json,output/%.$(SUFFIX),$(filter input/pass%,$(CASES))) \
+	$(patsubst input/%.cpp,output/%.$(SUFFIX),$(filter input/%.cpp,$(CASES)))
 	$(Q)echo "{" | tee $@
 	$(Q)\
 	for x in $(filter input/fail_%.json,$^); do \
@@ -55,7 +60,7 @@ $(LOG): output/fail.$(SUFFIX) output/fail5.$(SUFFIX) $(CASES) \
 	for x in $(filter input/fail5_%.json,$^); do \
 		./output/fail5.$(SUFFIX) $$x | tee -a $@ | $(COLORIZE); \
 	done; \
-	for x in $(filter %.$(SUFFIX),$^); do \
+	for x in $(filter output/%.$(SUFFIX),$^); do \
 		n=$${x##*/}; j=$${n%.*}.json; c=compare/$$j; \
 		unset o; test -f $$c && o=output/$$j; \
 		./$$x input/$$j $$o | tee -a $@ | $(COLORIZE); \
