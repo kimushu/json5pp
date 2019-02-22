@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
       if (!verify(value)) { throw -1; }
       if (argc == 3) {
         std::ofstream out(argv[2], std::ios::binary);
-        value->stringify_to(out, json5pp::indent::spaces<2>());
+        out << json5pp::rule::space_indent(2) << value;
       }
       std::cout << "\"[PASS] parse and match succeeded.\"," << std::endl;
       std::exit(0);

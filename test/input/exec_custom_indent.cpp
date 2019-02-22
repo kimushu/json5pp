@@ -3,8 +3,6 @@
 
 void exec(std::ostream& out)
 {
-  json5pp::value::array a;
-  a.emplace_back(new json5pp::value::number(1));
-  a.emplace_back(new json5pp::value::number(2));
-  a.stringify_to(out, json5pp::indent::spec<'\t', 3>());
+  auto value = json5pp::array({1, 2});
+  out << json5pp::rule::tab_indent(3) << value;
 }

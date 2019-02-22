@@ -3,9 +3,6 @@
 
 void exec(std::ostream& out)
 {
-  json5pp::value::object o;
-  o.emplace("a", nullptr);
-  o.emplace("b", new json5pp::value::number(123));
-  o.emplace("c", nullptr);
-  o.stringify_to(out);
+  auto value = json5pp::object({{"a", nullptr}, {"b", 123}, {"c", nullptr}});
+  out << value;
 }

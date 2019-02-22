@@ -1,6 +1,6 @@
 #include "../../json5pp.hpp"
 
-static bool verify(const json5pp::value::ptr& value)
+static bool verify(const json5pp::value& value)
 {
-  return value->as_number().get() == 1;
+  return value.as_number() == 1;
 }

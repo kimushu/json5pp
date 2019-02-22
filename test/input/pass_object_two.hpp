@@ -1,8 +1,8 @@
 #include "../../json5pp.hpp"
 
-static bool verify(const json5pp::value::ptr& value)
+static bool verify(const json5pp::value& value)
 {
-  auto object = value->as_object();
+  auto object = value.as_object();
   return (object.size() == 2) &&
-    (object["a"]->as_number().get() == 123) && (object["b"]->as_string() == "xyz");
+    (object["a"].as_number() == 123) && (object["b"].as_string() == "xyz");
 }

@@ -1,6 +1,6 @@
 #include "../../json5pp.hpp"
 
-static bool verify(const json5pp::value::ptr& value)
+static bool verify(const json5pp::value& value)
 {
-  return value->as_string() == "foo.bar'baz";
+  return value.as_string() == "foo.bar'baz";
 }
