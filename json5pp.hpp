@@ -45,8 +45,74 @@ public:
 
 namespace impl {
 
-template <class T> class parse_context;
-/*template <class T> */class stringify_context;
+/**
+ * @brief Parser/stringifier flags
+ */
+enum flags : std::uint32_t
+{
+  // Syntax flags
+  single_line_comment     = (1u<<0),
+  multi_line_comment      = (1u<<1),
+  comments                = single_line_comment|multi_line_comment,
+  explicit_plus_sign      = (1u<<2),
+  leading_decimal_point   = (1u<<3),
+  trailing_decimal_point  = (1u<<4),
+  decimal_points          = leading_decimal_point|trailing_decimal_point,
+  infinity_number         = (1u<<5),
+  not_a_number            = (1u<<6),
+  hexadecimal             = (1u<<7),
+  single_quote            = (1u<<8),
+  multi_line_string       = (1u<<9),
+  trailing_comma          = (1u<<10),
+  unquoted_key            = (1u<<11),
+
+  // Syntax flag sets
+  json5_rules             = ((unquoted_key<<1)-1),
+  all_rules               = json5_rules,
+
+  // Parse options
+  finished                = (1u<<29),
+  parse_mask              = all_rules|finished,
+
+  // Stringify options
+  crlf_newline            = (1u<<31),
+  stringify_mask          = infinity_number|not_a_number|crlf_newline,
+};
+
+using flags_type = std::underlying_type<flags>::type;
+using indent_type = std::int8_t;
+
+template <flags_type F> class parser;
+template <flags_type F, indent_type I> class stringifier;
+
+template <flags_type S, flags_type C>
+class manipulator_flags
+{
+public:
+  /**
+   * @brief Invert set/clear of flags
+   * 
+   * @return A new flag manipulator
+   */
+  manipulator_flags<C,S> operator-() const { return manipulator_flags<C,S>(); }
+
+  template <flags_type S_, flags_type C_>
+  friend parser<S_&flags::parse_mask> operator>>(std::istream& istream, const manipulator_flags<S_,C_>& manip);
+
+  template <flags_type S_, flags_type C_>
+  friend stringifier<S_&flags::stringify_mask,0> operator<<(std::ostream& ostream, const manipulator_flags<S_,C_>& manip);
+};
+
+template <indent_type I>
+class manipulator_indent
+{
+public:
+  template <indent_type I_>
+  friend parser<0> operator>>(std::istream& istream, const manipulator_indent<I_>& manip);
+
+  template <indent_type I_>
+  friend stringifier<0,I_> operator<<(std::ostream& ostream, const manipulator_indent<I_>& manip);
+};
 
 } /* namespace impl */
 
@@ -114,6 +180,15 @@ public:
    * @param string A string value to be set.
    */
   value(const string_type& string) : type(TYPE_STRING)
+  {
+    new(&content.string) string_type(string);
+  }
+
+  /**
+   * @brief JSON value constructor for "string" type. (const char* version)
+   * @param string A string value to be set.
+   */
+  value(const char *string) : type(TYPE_STRING)
   {
     new(&content.string) string_type(string);
   }
@@ -256,72 +331,132 @@ public:
    * Type casts
    */
 public:
+  /**
+   * @brief Cast to null
+   * 
+   * @throws std::bad_cast if the value is not a null
+   */
   null_type as_null() const
   {
     if (type != TYPE_NULL) { throw std::bad_cast(); }
     return nullptr;
   }
 
+  /**
+   * @brief Cast to boolean
+   * 
+   * @throws std::bad_cast if the value is not a boolean
+   */
   boolean_type as_boolean() const
   {
     if (type != TYPE_BOOLEAN) { throw std::bad_cast(); }
     return content.boolean;
   }
 
+  /**
+   * @brief Cast to boolean reference
+   * 
+   * @throws std::bad_cast if the value is not a boolean
+   */
   boolean_type& as_boolean()
   {
     if (type != TYPE_BOOLEAN) { throw std::bad_cast(); }
     return content.boolean;
   }
 
+  /**
+   * @brief Cast to number
+   * 
+   * @throws std::bad_cast if the value is not a number
+   */
   number_type as_number() const
   {
     if (type != TYPE_NUMBER) { throw std::bad_cast(); }
     return content.number;
   }
 
+  /**
+   * @brief Cast to number reference
+   * 
+   * @throws std::bad_cast if the value is not a number
+   */
   number_type& as_number()
   {
     if (type != TYPE_NUMBER) { throw std::bad_cast(); }
     return content.number;
   }
 
+  /**
+   * @brief Cast to integer number
+   * 
+   * @throws std::bad_cast if the value is not a number
+   */
   number_i_type as_integer() const
   {
     if (type != TYPE_NUMBER) { throw std::bad_cast(); }
     return static_cast<number_i_type>(content.number);
   }
 
+  /**
+   * @brief Cast to string
+   * 
+   * @throws std::bad_cast if the value is not a string
+   */
   const string_type& as_string() const
   {
     if (type != TYPE_STRING) { throw std::bad_cast(); }
     return content.string;
   }
 
+  /**
+   * @brief Cast to string reference
+   * 
+   * @throws std::bad_cast if the value is not a string
+   */
   string_type& as_string()
   {
     if (type != TYPE_STRING) { throw std::bad_cast(); }
     return content.string;
   }
 
+  /**
+   * @brief Cast to array
+   * 
+   * @throws std::bad_cast if the value is not a array
+   */
   const array_type& as_array() const
   {
     if (type != TYPE_ARRAY) { throw std::bad_cast(); }
     return content.array;
   }
 
+  /**
+   * @brief Cast to array reference
+   * 
+   * @throws std::bad_cast if the value is not a array
+   */
   array_type& as_array()
   {
     if (type != TYPE_ARRAY) { throw std::bad_cast(); }
     return content.array;
   }
 
+  /**
+   * @brief Cast to object
+   * 
+   * @throws std::bad_cast if the value is not a object
+   */
   const object_type& as_object() const
   {
     if (type != TYPE_OBJECT) { throw std::bad_cast(); }
     return content.object;
   }
 
+  /**
+   * @brief Cast to object reference
+   * 
+   * @throws std::bad_cast if the value is not a object
+   */
   object_type& as_object()
   {
     if (type != TYPE_OBJECT) { throw std::bad_cast(); }
@@ -462,82 +597,25 @@ public:
    * Parse
    */
 private:
-  friend value parse(std::istream& istream, bool finished);
-  friend value parse5(std::istream& istream, bool finished);
+  template <impl::flags_type F>
+  friend class impl::parser;
+
+  friend impl::parser<0> operator>>(std::istream& istream, value& v);
 
   /*================================================================================
    * Stringify
    */
-  friend class impl::stringify_context;
+  template <impl::flags_type F, impl::indent_type I>
+  friend class impl::stringifier;
 
-  friend impl::stringify_context operator<<(std::ostream& ostream, const value& value);
+  friend impl::stringifier<0,0> operator<<(std::ostream& ostream, const value& v);
 
+public:
   template <class... T>
   json_type stringify(T... args) const;
 
-private:
-
-  /**
-   * @brief Do stringify (A specialized function for manipulator expansion)
-   * 
-   * @param context A stringify context
-   */
-  void stringify_with_manip(impl::stringify_context& context) const
-  {
-    stringify_to(context);
-  }
-
-  /**
-   * @brief A function for manipulator expansion
-   * 
-   * @tparam M A typename of manipulator
-   * @tparam T... A list of typenames of manipulator
-   * @param context A stringify context
-   * @param manip The first manipulator to be applied
-   * @param args The remainings
-   */
-  template <class M, class... T>
-  void stringify_with_manip(impl::stringify_context& context, const M& manip, T... args) const
-  {
-    stringify_with_manip(context << manip, args...);
-  }
-
-  void stringify_to(impl::stringify_context& context) const;
-  void stringify_to(impl::stringify_context& context, const std::string indent) const;
-
-  /**
-   * @brief Stringify string
-   * 
-   * @param out An output stream
-   * @param string A string to be stringified
-   */
-  static void stringify_string(std::ostream& out, const string_type& string)
-  {
-    out << "\"";
-    for (const auto& i : string) {
-      const auto ch = (unsigned char)i;
-      static const char hex[] = "0123456789abcdef";
-      switch (ch) {
-      case '"':  out << "\\\""; break;
-      case '\\': out << "\\\\"; break;
-      case '\b': out << "\\b";  break;
-      case '\f': out << "\\f";  break;
-      case '\n': out << "\\n";  break;
-      case '\r': out << "\\r";  break;
-      case '\t': out << "\\t";  break;
-      default:
-        if (ch < ' ') {
-          out << "\\u00";
-          out.put(hex[(ch >> 4) & 0xf]);
-          out.put(hex[ch & 0xf]);
-        } else {
-          out.put(ch);
-        }
-        break;
-      }
-    }
-    out << "\"";
-  }
+  template <class... T>
+  json_type stringify5(T... args) const;
 
   /*================================================================================
    * Internal data structure
@@ -587,242 +665,100 @@ inline value object(std::initializer_list<value::pair_type> elements)
 
 namespace impl {
 
-enum flags : std::uint16_t
-{
-  single_line_comment     = (1u<<0),
-  multi_line_comment      = (1u<<1),
-  explicit_plus_sign      = (1u<<2),
-  leading_decimal_point   = (1u<<3),
-  trailing_decimal_point  = (1u<<4),
-  infinity_number         = (1u<<5),
-  not_a_number            = (1u<<6),
-  hexadecimal             = (1u<<7),
-  single_quote            = (1u<<8),
-  multi_line_string       = (1u<<9),
-  trailing_comma          = (1u<<10),
-  unquoted_key            = (1u<<11),
-
-  json5_rules = ((unquoted_key << 1) - 1),
-  all_rules = json5_rules,
-
-  crlf_newline            = (1u<<14),
-  finished                = (1u<<15),
-};
-
-using flags_type = std::underlying_type<flags>::type;
-using indent_type = std::int8_t;
-
-// Forward declarations
-class context_base;
-template <class T> class parse_context;
-class stringify_context;
-
 /**
- * @brief Manipulator for parse/stringify contexts
- */
-class manipulator
-{
-  friend class context_base;
-public:
-  /**
-   * @brief Construct a new manipulator with all member values
-   * 
-   * @param flags_set Flags to be set
-   * @param flags_clear Flags to be cleared
-   * @param indent_set If true, indent is valid
-   * @param indent Indent specification
-   */
-  manipulator(flags_type flags_set, flags_type flags_clear, bool indent_set, indent_type indent = 0)
-  : flags_set(flags_set), flags_clear(flags_clear), indent_set(indent_set), indent(indent)
-  {
-  }
-
-  /**
-   * @brief Construct a new manipulator with flags and set/clear selection
-   * 
-   * @param flags Flags to be set or cleared
-   * @param set If true, flags will be used to set.
-   */
-  manipulator(flags_type flags, bool set)
-  : flags_set(set ? flags : 0), flags_clear(set ? 0 : flags), indent_set(false), indent(0)
-  {
-  }
-
-public:
-  friend parse_context<void> operator>>(std::istream& istream, const manipulator& manip);
-  friend stringify_context operator<<(std::ostream& ostream, const manipulator& manip);
-
-private:
-  flags_type flags_set;     ///< Flags to be set
-  flags_type flags_clear;   ///< Flags to be cleared
-  bool indent_set;          ///< If true, indent is valid
-  indent_type indent;       ///< Indent specification
-};
-
-/**
- * @brief A base class for JSON parse/stringify context
- */
-class context_base
-{
-public:
-  flags_type flags;         ///< JSON flags
-  indent_type indent;       ///< Indent specification
-
-  /**
-   * @brief Get an indent string
-   * 
-   * @return std::string 
-   */
-  std::string get_indent() const
-  {
-    if (indent > 0) {
-      return std::string(indent, ' ');
-    } else if (indent < 0) {
-      return std::string(-indent, '\t');
-    }
-    return std::string();
-  }
-
-  /**
-   * @brief Get newline string
-   */
-  const char* get_newline() const
-  {
-    return (flags & flags::crlf_newline) ? "\r\n" : "\n";
-  }
-
-  /**
-   * @brief Check if flags are set
-   * 
-   * @param flags Flags to check
-   * @retval true One of more flags are set
-   * @retval false No flags are set
-   */
-  inline bool has_flag(flags_type flags) const
-  {
-    return (this->flags & flags) != 0;
-  }
-
-protected:
-  /**
-   * @brief Construct a new context_base object
-   */
-  context_base()
-  : flags(0), indent(0)
-  {
-  }
-
-  /**
-   * @brief Apply JSON manipulator to this context
-   * 
-   * @param manip A manipulator
-   */
-  void apply_manipulator(const manipulator& manip)
-  {
-    flags = (flags & ~manip.flags_clear) | manip.flags_set;
-    if (manip.indent_set) {
-      indent = manip.indent;
-    }
-  }
-};
-
-/**
- * @brief JSON parse context
- * @note This class is defined as template to make symbols weak.
+ * @brief Parser implementation
  * 
- * @tparam T Ignored.
+ * @tparam F A combination of flags
  */
-template <class T>
-class parse_context : public context_base
+template <flags_type F>
+class parser
 {
+private:
+  using self_type = parser<F>;
+  static constexpr auto M = flags::parse_mask;
+
 public:
-  std::istream& istream;  ///< ios stream
+  /**
+   * @brief Construct a new parser object
+   * 
+   * @param istream An input stream
+   */
+  parser(std::istream& istream) : istream(istream) {}
 
   /**
-   * @brief Construct a new parse_context object
+   * @brief Apply flag manipulator
    * 
-   * @param istream A reference to ios stream
+   * @tparam S Flags to be set
+   * @tparam C Flags to be cleared
+   * @param manip A manipulator
+   * @return An updated parser object
    */
-  parse_context(std::istream& istream)
-  : istream(istream)
+  template <flags_type S, flags_type C>
+  parser<((F&~C)|S)&M> operator>>(const manipulator_flags<S,C>& manip)
   {
+    return parser<((F&~C)|S)&M>(istream);
   }
 
   /**
-   * @brief Apply JSON manipulator
+   * @brief Apply indent manipulator (For parser, this is ignored)
    * 
-   * @param manip A JSON manipulator to be applied
-   * @return A referenece to object itself
+   * @tparam NI A new indent specification
+   * @param manip A manipulator
+   * @return A reference to self
    */
-  parse_context<T>& operator>>(const manipulator& manip)
+  template <indent_type NI>
+  self_type& operator>>(const manipulator_indent<NI>& manip)
   {
-    apply_manipulator(manip);
     return *this;
   }
 
-  // Parse JSON value (written after "class value" definition)
-  parse_context<T>& operator>>(value& value);
-
   /**
-   * @brief Delegate operator>> to ios stream
+   * @brief Delegate manipulator to std::istream
    * 
-   * @tparam TT A typename of value
-   * @param value A value to delegate
-   * @return A reference to ios stream
-   */
-  template <class TT>
-  std::istream& operator>>(TT& value)
-  {
-    return istream >> value;
-  }
-
-  /**
-   * @brief Delegate operator>> for manipulators to ios stream
-   * 
-   * @param manip A manipulator to delegate
-   * @return A reference to ios stream
+   * @param manip A stream manipulator
+   * @return An input stream
    */
   std::istream& operator>>(std::istream& (*manip)(std::istream&))
   {
     return istream >> manip;
   }
 
-  static bool is_digit(int ch)
+  /**
+   * @brief Delegate operator>> to std::istream
+   * 
+   * @tparam T A typename of argument
+   * @param v A value
+   * @return An input stream
+   */
+  template <class T>
+  std::istream& operator>>(T& v)
   {
-    return (('0' <= ch) && (ch <= '9'));
+    return istream >> v;
   }
 
-  static int to_number(int ch)
+  /**
+   * @brief Parse JSON
+   * 
+   * @param v A value object to store parsed value
+   * @return A reference to self
+   */
+  self_type& operator>>(value& v)
   {
-    return ch - '0';
+    do_parse(v);
+    return *this;
   }
 
-  static int to_number_hex(int ch)
+private:
+  /**
+   * @brief Check if flag(s) enabled
+   * 
+   * @param flags Combination of flags to be tested
+   * @retval true Any flag is enabled
+   * @retval False No flag is enabled
+   */
+  static constexpr bool has_flag(flags_type flags)
   {
-    if (is_digit(ch)) {
-      return to_number(ch);
-    } else if (('A' <= ch) && (ch <= 'F')) {
-      return ch - 'A' + 10;
-    } else if (('a' <= ch) && (ch <= 'f')) {
-      return ch - 'a' + 10;
-    }
-    return -1;
-  }
-
-  static bool is_alpha(int ch)
-  {
-    return (('A' <= ch) && (ch <= 'Z')) || (('a' <= ch) && (ch <= 'z'));
-  }
-
-  template <class... C>
-  bool equals(int& ch, char expected, C... sequence)
-  {
-    return equals(ch, expected) && equals(ch, sequence...);
-  }
-
-  bool equals(int& ch, char expected)
-  {
-    return ((ch = istream.get()) == expected);
+    return (F & flags) != 0;
   }
 
   /**
@@ -883,19 +819,103 @@ public:
     } /* for(;;) */
   }
 
-  void parse(value& v, bool finished)
+  /**
+   * @brief Check if a character is a digit [0-9]
+   * 
+   * @param ch Character code to test
+   * @retval true The character is a digit
+   * @retval false The character is not a digit
+   */
+  static bool is_digit(int ch)
   {
-    static const char context_name[] = "value";
-    parse(v, context_name);
-    if (finished) {
+    return (('0' <= ch) && (ch <= '9'));
+  }
+
+  /**
+   * @brief Convert a digit character [0-9] to number (0-9)
+   * 
+   * @param ch Character code to convert
+   * @return A converted number (0-9)
+   */
+  static int to_number(int ch)
+  {
+    return ch - '0';
+  }
+
+  /**
+   * @brief Convert a hexadecimal digit character [0-9A-Fa-f] to number (0-15)
+   * 
+   * @param ch Character code to convert
+   * @return int A converted number (0-15)
+   */
+  static int to_number_hex(int ch)
+  {
+    if (is_digit(ch)) {
+      return to_number(ch);
+    } else if (('A' <= ch) && (ch <= 'F')) {
+      return ch - 'A' + 10;
+    } else if (('a' <= ch) && (ch <= 'f')) {
+      return ch - 'a' + 10;
+    }
+    return -1;
+  }
+
+  /**
+   * @brief Check if a character is an alphabet
+   * 
+   * @param ch 
+   * @return true 
+   * @return false 
+   */
+  static bool is_alpha(int ch)
+  {
+    return (('A' <= ch) && (ch <= 'Z')) || (('a' <= ch) && (ch <= 'z'));
+  }
+
+  /**
+   * @brief Check character sequence
+   * 
+   * @tparam C A list of typenames of character
+   * @param ch A buffer to store latest character code
+   * @param expected The first expected character code
+   * @param sequence Successive expected character codes
+   * @retval true All characters match
+   * @return false Mismatch (ch holds a mismatched character)
+   */
+  template <class... C>
+  bool equals(int& ch, char expected, C... sequence)
+  {
+    return equals(ch, expected) && equals(ch, sequence...);
+  }
+  bool equals(int& ch, char expected)
+  {
+    return ((ch = istream.get()) == expected);
+  }
+
+  /**
+   * @brief Parser entry
+   * 
+   * @param v A value object to store parsed value
+   */
+  void do_parse(value& v)
+  {
+    static const char context[] = "value";
+    parse_value(v, context);
+    if (F & flags::finished) {
       int ch = skip_spaces();
       if (ch != std::char_traits<char>::eof()) {
-        throw syntax_error(ch, context_name);
+        throw syntax_error(ch, context);
       }
     }
   }
 
-  void parse(value& v, const char *context_name)
+  /**
+   * @brief Parse value
+   * 
+   * @param v A value object to store parsed value
+   * @param context A description of context
+   */
+  void parse_value(value& v, const char *context)
   {
     int ch = skip_spaces();
 
@@ -924,24 +944,35 @@ public:
         // [number]?
         return parse_number(v, ch);
       }
-      throw syntax_error(ch, context_name);
+      throw syntax_error(ch, context);
     }
   }
 
+  /**
+   * @brief Parse null value
+   * 
+   * @param v A value object to store parsed value
+   */
   void parse_null(value& v)
   {
-    static const char context_name[] = "null";
+    static const char context[] = "null";
     int ch;
     if (equals(ch, 'u', 'l', 'l')) {
       v = nullptr;
       return;
     }
-    throw syntax_error(ch, context_name);
+    throw syntax_error(ch, context);
   }
 
+  /**
+   * @brief Parse boolean value
+   * 
+   * @param v A value object to store parsed value
+   * @param ch The first character
+   */
   void parse_boolean(value& v, int ch)
   {
-    static const char context_name[] = "boolean";
+    static const char context[] = "boolean";
     if (ch == 't') {
       if (equals(ch, 'r', 'u', 'e')) {
         v = true;
@@ -953,12 +984,18 @@ public:
         return;
       }
     }
-    throw syntax_error(ch, context_name);
+    throw syntax_error(ch, context);
   }
 
+  /**
+   * @brief Parse number value
+   * 
+   * @param v A value object to store parsed value
+   * @param ch The first character
+   */
   void parse_number(value& v, int ch)
   {
-    static const char context_name[] = "number";
+    static const char context[] = "number";
     unsigned long long int_part = 0;
     unsigned long long frac_part = 0;
     int frac_divs = 0;
@@ -978,6 +1015,25 @@ public:
       if (ch == '0') {
         // ["0"]
         ch = istream.get();
+        if (has_flag(flags::hexadecimal) && ((ch == 'x') || (ch == 'X'))) {
+          // [hexdigit]+
+          bool no_digit = true;
+          for (;;) {
+            ch = istream.get();
+            int digit = to_number_hex(ch);
+            if (digit < 0) {
+              istream.unget();
+              break;
+            }
+            int_part = (int_part << 4) | digit;
+            no_digit = false;
+          }
+          if (no_digit) {
+            throw syntax_error(ch, context);
+          }
+          v = (double)(negative ? -int_part : int_part);
+          return;
+        }
         break;
       } else if (is_digit(ch)) {
         // [onenine]
@@ -1005,7 +1061,7 @@ public:
           return;
         }
       }
-      throw syntax_error(ch, context_name);
+      throw syntax_error(ch, context);
     }
     if (ch == '.') {
       // [frac]
@@ -1014,7 +1070,7 @@ public:
         frac_part += to_number(ch);
       }
       if ((!has_flag(flags::trailing_decimal_point)) && (frac_divs == 0)) {
-        throw syntax_error(ch, context_name);
+        throw syntax_error(ch, context);
       }
     }
     if ((ch == 'e') || (ch == 'E')) {
@@ -1034,7 +1090,7 @@ public:
         exp_part += to_number(ch);
       }
       if (no_digit) {
-        throw syntax_error(ch, context_name);
+        throw syntax_error(ch, context);
       }
     }
     istream.unget();
@@ -1048,10 +1104,17 @@ public:
     v = negative ? -number_value : +number_value;
   }
 
-  void parse_string(std::string& buffer, int quote, const char *context_name)
+  /**
+   * @brief Parse string
+   * 
+   * @param buffer A buffer to store string
+   * @param quote The first quote character
+   * @param context A description of context
+   */
+  void parse_string(std::string& buffer, int quote, const char *context)
   {
     if (!((quote == '"') || (has_flag(flags::single_quote) && quote == '\''))) {
-      throw syntax_error(quote, context_name);
+      throw syntax_error(quote, context);
     }
     buffer.clear();
     for (;;) {
@@ -1059,14 +1122,14 @@ public:
       if (ch == quote) {
         break;
       } else if (ch < ' ') {
-        throw syntax_error(ch, context_name);
+        throw syntax_error(ch, context);
       } else if (ch == '\\') {
         // [escape]
         ch = istream.get();
         switch (ch) {
         case '\'':
           if (!has_flag(flags::single_quote)) {
-            throw syntax_error(ch, context_name);
+            throw syntax_error(ch, context);
           }
           break;
         case '"':
@@ -1096,7 +1159,7 @@ public:
               ch = istream.get();
               int n = to_number_hex(ch);
               if (n < 0) {
-                throw syntax_error(ch, context_name);
+                throw syntax_error(ch, context);
               }
               code = (code << 4) + n;
             }
@@ -1127,23 +1190,34 @@ public:
           }
           /* no-break */
         default:
-          throw syntax_error(ch, context_name);
+          throw syntax_error(ch, context);
         }
       }
       buffer.append(1, (char)ch);
     }
   }
 
+  /**
+   * @brief Parse string value
+   * 
+   * @param v A value object to store parsed value
+   * @param quote The first quote character
+   */
   void parse_string(value& v, int quote)
   {
-    static const char context_name[] = "string";
+    static const char context[] = "string";
     v = "";
-    parse_string(v.as_string(), quote, context_name);
+    parse_string(v.as_string(), quote, context);
   }
 
+  /**
+   * @brief Parse array value
+   * 
+   * @param v A value object to store parsed value
+   */
   void parse_array(value& v)
   {
-    static const char context_name[] = "array";
+    static const char context[] = "array";
     v = array({});
     auto& elements = v.as_array();
     for (;;) {
@@ -1154,7 +1228,7 @@ public:
       if (elements.empty()) {
         istream.unget();
       } else if (ch != ',') {
-        throw syntax_error(ch, context_name);
+        throw syntax_error(ch, context);
       } else if (has_flag(trailing_comma)) {
         ch = istream.get();
         if (ch == ']') {
@@ -1164,13 +1238,18 @@ public:
       }
       // [value]
       elements.emplace_back(nullptr);
-      parse(elements.back(), context_name);
+      parse_value(elements.back(), context);
     }
   }
 
+  /**
+   * @brief Parse object key
+   * 
+   * @return A parsed string
+   */
   std::string parse_key()
   {
-    static const char context_name[] = "object-key";
+    static const char context[] = "object-key";
     std::string buffer;
     int ch = skip_spaces();
     if (has_flag(flags::unquoted_key)) {
@@ -1183,7 +1262,7 @@ public:
           } else if (ch == ':') {
             break;
           } else {
-            throw syntax_error(ch, context_name);
+            throw syntax_error(ch, context);
           }
           buffer.append(1, (char)ch);
         }
@@ -1191,13 +1270,18 @@ public:
         return buffer;
       }
     }
-    parse_string(buffer, ch, context_name);
+    parse_string(buffer, ch, context);
     return buffer;
   }
 
+  /**
+   * @brief Parse object value
+   * 
+   * @param v A value object to store parsed value
+   */
   void parse_object(value& v)
   {
-    static const char context_name[] = "object";
+    static const char context[] = "object";
     v = object({});
     auto& elements = v.as_object();
     for (;;) {
@@ -1208,7 +1292,7 @@ public:
       if (elements.empty()) {
         istream.unget();
       } else if (ch != ',') {
-        throw syntax_error(ch, context_name);
+        throw syntax_error(ch, context);
       } else if (has_flag(flags::trailing_comma)) {
         ch = istream.get();
         if (ch == '}') {
@@ -1221,480 +1305,587 @@ public:
       const std::string key = parse_key();
       ch = skip_spaces();
       if (ch != ':') {
-        throw syntax_error(ch, context_name);
+        throw syntax_error(ch, context);
       }
       // [value]
       auto result = elements.emplace(key, nullptr);
-      parse(result.first->second, context_name);
+      parse_value(result.first->second, context);
     }
   }
+
+  std::istream& istream;  ///< An input stream
 };
 
 /**
- * @brief JSON stringify context
+ * @brief Stringifier implementation
+ * 
+ * @tparam F A combination of flags
+ * @tparam I An indent specification
  */
-class stringify_context : public context_base
+template <flags_type F, indent_type I>
+class stringifier
 {
+private:
+  using self_type = stringifier<F,I>;
+  static constexpr auto M = flags::stringify_mask;
+
 public:
   /**
-   * @brief Construct a new stringify_context object
+   * @brief Construct a new stringifier object
    * 
-   * @param istream A reference to ios stream
+   * @param ostream An output stream
    */
-  stringify_context(std::ostream& ostream)
-  : ostream(ostream)
+  stringifier(std::ostream& ostream) : ostream(ostream) {}
+
+  /**
+   * @brief Apply flag manipulator
+   * 
+   * @tparam S Flags to be set
+   * @tparam C Flags to be cleared
+   * @param manip A manipulator
+   * @return An updated stringifier object
+   */
+  template <flags_type S, flags_type C>
+  stringifier<((F&~C)|S)&M,I> operator<<(const manipulator_flags<S,C>& manip)
   {
+    return stringifier<((F&~C)|S)&M,I>(ostream);
   }
 
   /**
-   * @brief Apply JSON manipulator
+   * @brief Apply indent manipulator
    * 
-   * @param manip A JSON manipulator to be applied
-   * @return A referenece to object itself
+   * @tparam NI A new indent specification
+   * @param manip A manipulator
+   * @return stringifier<F,NI> 
+   * @return An updated stringifier object
    */
-  stringify_context& operator<<(const manipulator manip)
+  template <indent_type NI>
+  stringifier<F,NI> operator<<(const manipulator_indent<NI>& manip)
   {
-    apply_manipulator(manip);
-    return *this;
-  }
-
-  // Stringify JSON value (written after "class value" definition)
-  stringify_context& operator<<(const value& value);
-
-  /**
-   * @brief Delegate operator<< for values to ios stream
-   * 
-   * @tparam T A typename of value
-   * @param value A value to delegate
-   * @return A reference to ios stream
-   */
-  template <class T>
-  std::ostream& operator<<(const T& value)
-  {
-    return ostream << value;
+    return stringifier<F,NI>(ostream);
   }
 
   /**
-   * @brief Delegate operator<< for manipulators to ios stream
+   * @brief Delegate manipulator to std::ostream
    * 
-   * @param manip A manipulator to delegate
-   * @return A reference to ios stream
+   * @param manip A stream manipulator
+   * @return An output stream
    */
   std::ostream& operator<<(std::ostream& (*manip)(std::ostream&))
   {
     return ostream << manip;
   }
 
-  std::ostream& ostream;  ///< ios stream
+  /**
+   * @brief Delegate operator<< to std::ostream
+   * 
+   * @tparam T A typename of argument
+   * @param v A value
+   * @return An output stream
+   */
+  template <class T>
+  std::ostream& operator<<(const T& v)
+  {
+    return ostream << v;
+  }
+
+  /**
+   * @brief Stringify JSON
+   * 
+   * @param v A value object to stringify
+   * @return A reference to self
+   */
+  self_type& operator<<(const value& v)
+  {
+    do_stringify(v);
+    return *this;
+  }
+
+private:
+  /**
+   * @brief Check if flag(s) enabled
+   * 
+   * @param flags Combination of flags to be tested
+   * @retval true Any flag is enabled
+   * @retval False No flag is enabled
+   */
+  static constexpr bool has_flag(flags_type flags)
+  {
+    return (F & flags) != 0;
+  }
+
+  /**
+   * @brief Get newline code
+   * 
+   * @return A newline string literal
+   */
+  static const char *get_newline()
+  {
+    return (F & flags::crlf_newline) ? "\r\n" : "\n";
+  }
+
+  /**
+   * @brief Get the indent text
+   * 
+   * @return An indent text for one level
+   */
+  static value::json_type get_indent()
+  {
+    if (I > 0) {
+      return value::json_type(I, ' ');
+    } else if (I < 0) {
+      return value::json_type(-I, '\t');
+    }
+    return value::json_type();
+  }
+
+  /**
+   * @brief Stringifier entry
+   * 
+   * @param v A value object to stringify
+   * @param indent An indent string
+   */
+  void do_stringify(const value& v)
+  {
+    class fmtsaver
+    {
+    public:
+      fmtsaver(std::ios_base& ios)
+      : ios(ios), flags(ios.flags()), width(ios.width())
+      {
+      }
+      ~fmtsaver()
+      {
+        ios.width(width);
+        ios.flags(flags);
+      }
+    private:
+      std::ios_base& ios;
+      const std::ios_base::fmtflags flags;
+      const std::streamsize width;
+    };
+    fmtsaver saver(ostream);
+    stringify_value(v, "");
+  }
+
+  /**
+   * @brief Stringify value
+   * 
+   * @param v A value object to stringify
+   * @param indent An indent string
+   */
+  void stringify_value(const value& v, const value::json_type& indent)
+  {
+    switch (v.type) {
+    case value::TYPE_BOOLEAN:
+      ostream << (v.content.boolean ? "true" : "false");
+      break;
+    case value::TYPE_NUMBER:
+      if (std::isnan(v.content.number)) {
+        if (!has_flag(flags::not_a_number)) {
+          goto null;
+        }
+        ostream << "NaN";
+      } else if (!std::isfinite(v.content.number)) {
+        if (!has_flag(flags::infinity_number)) {
+          goto null;
+        }
+        ostream << ((v.content.number > 0) ? "infinity" : "-infinity");
+      } else {
+        ostream << v.content.number;
+      }
+      break;
+    case value::TYPE_STRING:
+      stringify_string(v.content.string);
+      break;
+    case value::TYPE_ARRAY:
+      if (v.content.array.empty()) {
+        ostream << "[]";
+      } else if (I == 0) {
+        const char *delim = "[";
+        for (const auto& item : v.content.array) {
+          ostream << delim;
+          stringify_value(item, indent);
+          delim = ",";
+        }
+        ostream << "]";
+      } else {
+        const char *const newline = get_newline();
+        const char *delim = "[";
+        const value::json_type inner_indent = indent + get_indent();
+        for (const auto& item : v.content.array) {
+          ostream << delim << newline << inner_indent;
+          stringify_value(item, inner_indent);
+          delim = ",";
+        }
+        ostream << newline << indent << "]";
+      }
+      break;
+    case value::TYPE_OBJECT:
+      if (v.content.object.empty()) {
+        ostream << "{}";
+      } else if (I == 0) {
+        const char *delim = "{";
+        for (const auto& pair : v.content.object) {
+          ostream << delim;
+          stringify_string(pair.first);
+          ostream << ":";
+          stringify_value(pair.second, indent);
+          delim = ",";
+        }
+        ostream << "}";
+      } else {
+        const char *const newline = get_newline();
+        const char *delim = "{";
+        const value::json_type inner_indent = indent + get_indent();
+        for (const auto& pair : v.content.object) {
+          ostream << delim << newline << inner_indent;
+          stringify_string(pair.first);
+          ostream << ": ";
+          stringify_value(pair.second, inner_indent);
+          delim = ",";
+        }
+        ostream << newline << indent << "}";
+      }
+      break;
+    default:
+    null:
+      ostream << "null";
+      break;
+    }
+  }
+
+  /**
+   * @brief Stringify string
+   * 
+   * @param string A string to be stringified
+   */
+  void stringify_string(const value::string_type& string)
+  {
+    ostream << "\"";
+    for (const auto& i : string) {
+      const auto ch = (unsigned char)i;
+      static const char hex[] = "0123456789abcdef";
+      switch (ch) {
+      case '"':  ostream << "\\\""; break;
+      case '\\': ostream << "\\\\"; break;
+      case '\b': ostream << "\\b";  break;
+      case '\f': ostream << "\\f";  break;
+      case '\n': ostream << "\\n";  break;
+      case '\r': ostream << "\\r";  break;
+      case '\t': ostream << "\\t";  break;
+      default:
+        if (ch < ' ') {
+          ostream << "\\u00";
+          ostream.put(hex[(ch >> 4) & 0xf]);
+          ostream.put(hex[ch & 0xf]);
+        } else {
+          ostream.put(ch);
+        }
+        break;
+      }
+    }
+    ostream << "\"";
+  }
+
+  std::ostream& ostream;  ///< An output stream
 };
 
-template <class T>
-parse_context<T> operator>>(std::istream& istream, const manipulator& manip)
+/**
+ * @brief Apply flag manipulator to std::istream
+ * 
+ * @param istream An input stream
+ * @param manip A flag manipulator
+ * @return A new parser
+ */
+template <flags_type S, flags_type C>
+parser<S&flags::parse_mask> operator>>(std::istream& istream, const manipulator_flags<S,C>& manip)
 {
-  return parse_context<T>(istream) >> manip;
+  return parser<S&flags::parse_mask>(istream) >> manip;
 }
 
-inline stringify_context operator<<(std::ostream& ostream, const manipulator& manip)
+/**
+ * @brief Apply flag manipulator to std::ostream
+ * 
+ * @param ostream An output stream
+ * @param manip A flag manipulator
+ * @return A new stringifier
+ */
+template <flags_type S, flags_type C>
+stringifier<S&flags::stringify_mask,0> operator<<(std::ostream& ostream, const manipulator_flags<S,C>& manip)
 {
-  return stringify_context(ostream) << manip;
+  return stringifier<S&flags::stringify_mask,0>(ostream) << manip;
+}
+
+/**
+ * @brief Apply indent manipulator to std::istream
+ * 
+ * @param istream An input stream
+ * @param manip An indent manipulator
+ * @return A new parser
+ */
+template <indent_type I>
+parser<0> operator>>(std::istream& istream, const manipulator_indent<I>& manip)
+{
+  return parser<0>(istream) >> manip;
+}
+
+/**
+ * @brief Apply indent manipulator to std::ostream
+ * 
+ * @param ostream An output stream
+ * @param manip An indent manipulator
+ * @return A new stringifier
+ */
+template <indent_type I>
+stringifier<0,I> operator<<(std::ostream& ostream, const manipulator_indent<I>& manip)
+{
+  return stringifier<0,0>(ostream) << manip;
+}
+
+/**
+ * @brief Flow manipulator/value into stringifier
+ * 
+ * @tparam S A typename of stringifier
+ * @tparam T A typename of manipulator / value
+ * @tparam Args A list of typenames of other manipulators / values
+ * @param stringifier A stringifier
+ * @param value A manipulator / value
+ * @param args Other manipulators / values
+ */
+template <class S, class T, class... Args>
+static void flow_stringifier(S stringifier, T& value, Args&... args)
+{
+  flow_stringifier(stringifier << value, args...);
+}
+
+/**
+ * @brief Recursive expansion stopper for flow_stringifier
+ * 
+ * @tparam S A typename of stringifier
+ * @param stringifier A stringifier
+ */
+template <class S>
+static void flow_stringifier(S& stringifier)
+{
 }
 
 } /* namespace impl */
 
 /**
- * @brief Parse JSON
+ * @brief Parse JSON from an input stream (with ECMA-404 standard rule)
  * 
- * @param value A value object to hold parsed value
- * @return A referenece to object itself
+ * @param istream An input stream
+ * @param v A value to store parsed value
+ * @return A new parser
  */
-template <class T>
-impl::parse_context<T>& impl::parse_context<T>::operator>>(value& v)
+inline impl::parser<0> operator>>(std::istream& istream, value& v)
 {
-  parse(v, false);
-  return *this;
+  return impl::parser<0>(istream) >> v;
 }
 
 /**
- * @brief Stringify JSON
+ * @brief Stringify JSON to an output stream (with ECMA-404 standard rule)
  * 
- * @param value A value object to stringify
- * @return A referenece to object itself
+ * @param ostream An output stream
+ * @param v A value to stringify
+ * @return A new stringifier
  */
-inline impl::stringify_context& impl::stringify_context::operator<<(const value& value)
+inline impl::stringifier<0,0> operator<<(std::ostream& ostream, const value& v)
 {
-  value.stringify_to(*this);
-  return *this;
-}
-
-inline impl::stringify_context operator<<(std::ostream& ostream, const value& value)
-{
-  return impl::stringify_context(ostream) << value;
-}
-
-/**
- * @brief Stringify JSON value with manipulators
- * 
- * @tparam T A list of typename of arguments
- * @param args A list of manipulators
- * @return JSON text
- */
-template <class... T>
-value::json_type value::stringify(T... args) const
-{
-  std::ostringstream out;
-  stringify_with_manip(impl::stringify_context(out), args...);
-  return out.str();
-}
-
-inline void value::stringify_to(impl::stringify_context& context) const
-{
-  class fmtsaver
-  {
-  public:
-    fmtsaver(std::ios_base& ios)
-    : ios(ios), flags(ios.flags()), width(ios.width())
-    {
-    }
-    ~fmtsaver()
-    {
-      ios.width(width);
-      ios.flags(flags);
-    }
-  private:
-    std::ios_base& ios;
-    const std::ios_base::fmtflags flags;
-    const std::streamsize width;
-  };
-  fmtsaver saver(context.ostream);
-  context.ostream.flags(std::ios_base::fmtflags(0));
-  context.ostream.width(0);
-  stringify_to(context, "");
-}
-
-inline void value::stringify_to(impl::stringify_context& context, const std::string indent) const
-{
-  std::ostream& out = context.ostream;
-
-  switch (type) {
-  case TYPE_BOOLEAN:
-    out << (content.boolean ? "true" : "false");
-    break;
-  case TYPE_NUMBER:
-    if (std::isnan(content.number)) {
-      if (!context.has_flag(impl::flags::not_a_number)) {
-        goto null;
-      }
-      out << "NaN";
-    } else if (!std::isfinite(content.number)) {
-      if (!context.has_flag(impl::flags::infinity_number)) {
-        goto null;
-      }
-      out << ((content.number > 0) ? "infinity" : "-infinity");
-    } else {
-      out << content.number;
-    }
-    break;
-  case TYPE_STRING:
-    stringify_string(out, content.string);
-    break;
-  case TYPE_ARRAY:
-    if (content.array.empty()) {
-      out << "[]";
-    } else if (context.indent == 0) {
-      const char *delim = "[";
-      for (const auto& item : content.array) {
-        out << delim;
-        item.stringify_to(context);
-        delim = ",";
-      }
-      out << "]";
-    } else {
-      const char *const newline = context.get_newline();
-      const char *delim = "[";
-      const std::string inner_indent = indent + context.get_indent();
-      for (const auto& item : content.array) {
-        out << delim << newline << inner_indent;
-        item.stringify_to(context, inner_indent);
-        delim = ",";
-      }
-      out << newline << indent << "]";
-    }
-    break;
-  case TYPE_OBJECT:
-    if (content.object.empty()) {
-      out << "{}";
-    } else if (context.indent == 0) {
-      const char *delim = "{";
-      for (const auto& pair : content.object) {
-        out << delim;
-        stringify_string(out, pair.first);
-        out << ":";
-        pair.second.stringify_to(context);
-        delim = ",";
-      }
-      out << "}";
-    } else {
-      const char *const newline = context.get_newline();
-      const char *delim = "{";
-      const std::string inner_indent = indent + context.get_indent();
-      for (const auto& pair : content.object) {
-        out << delim << newline << inner_indent;
-        stringify_string(out, pair.first);
-        out << ": ";
-        pair.second.stringify_to(context, inner_indent);
-        delim = ",";
-      }
-      out << newline << indent << "}";
-    }
-    break;
-  default:
-  null:
-    out << "null";
-    break;
-  }
+  return impl::stringifier<0,0>(ostream) << v;
 }
 
 namespace rule {
 
 /**
- * @brief Allow/disallow single line comment starts with "//"
- * 
- * @param allow Allow(true) or disallow(false)
- * @return A JSON manipulator object
+ * @brief Allow single line comment starts with "//"
  */
-inline impl::manipulator single_line_comment(bool allow)
-{
-  return impl::manipulator(impl::flags::single_line_comment, allow);
-}
+using single_line_comment       = impl::manipulator_flags<impl::flags::single_line_comment, 0>;
 
 /**
- * @brief Allow/disallow multi line comment starts with "/*" and ends with "* /"
- * 
- * @param allow Allow(true) or disallow(false)
- * @return A JSON manipulator object
+ * @brief Disallow single line comment starts with "//"
  */
-inline impl::manipulator multi_line_comment(bool allow)
-{
-  return impl::manipulator(impl::flags::multi_line_comment, allow);
-}
+using no_single_line_comment    = impl::manipulator_flags<0, impl::flags::single_line_comment>;
 
 /**
- * @brief Allow/disallow any comments
- * 
- * @param allow Allow(true) or disallow(false)
- * @return A JSON manipulator object
+ * @brief Allow multi line comment starts with "/ *" and ends with "* /"
  */
-inline impl::manipulator comments(bool allow)
-{
-  return impl::manipulator(
-    (impl::flags::single_line_comment | impl::flags::multi_line_comment), allow);
-}
+using multi_line_comment        = impl::manipulator_flags<impl::flags::multi_line_comment, 0>;
 
 /**
- * @brief Allow/disallow explicit plus sign(+) before non-negative number
- * 
- * @param allow Allow(true) or disallow(false)
- * @return A JSON manipulator object
+ * @brief Disallow multi line comment starts with "/ *" and ends with "* /"
  */
-inline impl::manipulator explicit_plus_sign(bool allow)
-{
-  return impl::manipulator(impl::flags::explicit_plus_sign, allow);
-}
+using no_multi_line_comment     = impl::manipulator_flags<0, impl::flags::multi_line_comment>;
 
 /**
- * @brief Allow/disallow leading decimal point before number
- * 
- * @param allow Allow(true) or disallow(false)
- * @return A JSON manipulator object
+ * @brief Allow any comments
  */
-inline impl::manipulator leading_decimal_point(bool allow)
-{
-  return impl::manipulator(impl::flags::leading_decimal_point, allow);
-}
+using comments                  = impl::manipulator_flags<impl::flags::comments, 0>;
 
 /**
- * @brief Allow/disallow trailing decimal point after number
- * 
- * @param allow Allow(true) or disallow(false)
- * @return A JSON manipulator object
+ * @brief Disallow any comments
  */
-inline impl::manipulator trailing_decimal_point(bool allow)
-{
-  return impl::manipulator(impl::flags::trailing_decimal_point, allow);
-}
+using no_comments               = impl::manipulator_flags<0, impl::flags::comments>;
 
 /**
- * @brief Allow/disallow leading/trailing decimal points beside number
- * 
- * @param allow Allow(true) or disallow(false)
- * @return A JSON manipulator object
+ * @brief Allow explicit plus sign(+) before non-negative number
  */
-inline impl::manipulator decimal_points(bool allow)
-{
-  return impl::manipulator(
-    (impl::flags::leading_decimal_point | impl::flags::trailing_decimal_point), allow);
-}
+using explicit_plus_sign        = impl::manipulator_flags<impl::flags::explicit_plus_sign, 0>;
 
 /**
- * @brief Allow/disallow infinity (infinity/-infinity) as number value
- * 
- * @param allow Allow(true) or disallow(false)
- * @return A JSON manipulator object
+ * @brief Disallow explicit plus sign(+) before non-negative number
  */
-inline impl::manipulator infinity_number(bool allow)
-{
-  return impl::manipulator(impl::flags::infinity_number, allow);
-}
+using no_explicit_plus_sign     = impl::manipulator_flags<0, impl::flags::explicit_plus_sign>;
 
 /**
- * @brief Allow/disallow NaN as number value
- * 
- * @param allow Allow(true) or disallow(false)
- * @return A JSON manipulator object
+ * @brief Allow leading decimal point before number
  */
-inline impl::manipulator not_a_number(bool allow)
-{
-  return impl::manipulator(impl::flags::not_a_number, allow);
-}
+using leading_decimal_point     = impl::manipulator_flags<impl::flags::leading_decimal_point, 0>;
 
 /**
- * @brief Allow/disallow hexadeciaml number
- * 
- * @param allow Allow(true) or disallow(false)
- * @return A JSON manipulator object
+ * @brief Disallow leading decimal point before number
  */
-inline impl::manipulator hexadecimal(bool allow)
-{
-  return impl::manipulator(impl::flags::hexadecimal, allow);
-}
+using no_leading_decimal_point  = impl::manipulator_flags<0, impl::flags::leading_decimal_point>;
 
 /**
- * @brief Allow/disallow single-quoted string
- * 
- * @param allow Allow(true) or disallow(false)
- * @return A JSON manipulator object
+ * @brief Allow trailing decimal point after number
  */
-inline impl::manipulator single_quote(bool allow)
-{
-  return impl::manipulator(impl::flags::single_quote, allow);
-}
+using trailing_decimal_point    = impl::manipulator_flags<impl::flags::trailing_decimal_point, 0>;
 
 /**
- * @brief Allow/disallow multi line string escaped by "\"
- * 
- * @param allow Allow(true) or disallow(false)
- * @return A JSON manipulator object
+ * @brief Disallow trailing decimal point after number
  */
-inline impl::manipulator multi_line_string(bool allow)
-{
-  return impl::manipulator(impl::flags::multi_line_string, allow);
-}
+using no_trailing_decimal_point = impl::manipulator_flags<0, impl::flags::trailing_decimal_point>;
 
 /**
- * @brief Allow/disallow trailing comma in arrays and objects
- * 
- * @param allow Allow(true) or disallow(false)
- * @return A JSON manipulator object
+ * @brief Allow leading/trailing decimal points beside number
  */
-inline impl::manipulator trailing_comma(bool allow)
-{
-  return impl::manipulator(impl::flags::trailing_comma, allow);
-}
+using decimal_points            = impl::manipulator_flags<impl::flags::decimal_points, 0>;
 
 /**
- * @brief Allow/disallow unquoted keys in objects
- * 
- * @param allow Allow(true) or disallow(false)
- * @return A JSON manipulator object
+ * @brief Disallow leading/trailing decimal points beside number
  */
-inline impl::manipulator unquoted_key(bool allow)
-{
-  return impl::manipulator(impl::flags::unquoted_key, allow);
-}
+using no_decimal_points         = impl::manipulator_flags<0, impl::flags::decimal_points>;
+
+/**
+ * @brief Allow infinity (infinity/-infinity) as number value
+ */
+using infinity_number           = impl::manipulator_flags<impl::flags::infinity_number, 0>;
+
+/**
+ * @brief Disallow infinity (infinity/-infinity) as number value
+ */
+using no_infinity_number        = impl::manipulator_flags<0, impl::flags::infinity_number>;
+
+/**
+ * @brief Allow NaN as number value
+ */
+using not_a_number              = impl::manipulator_flags<impl::flags::not_a_number, 0>;
+
+/**
+ * @brief Disallow NaN as number value
+ */
+using no_not_a_number           = impl::manipulator_flags<0, impl::flags::not_a_number>;
+
+/**
+ * @brief Allow hexadeciaml number
+ */
+using hexadecimal               = impl::manipulator_flags<impl::flags::hexadecimal, 0>;
+
+/**
+ * @brief Disallow hexadeciaml number
+ */
+using no_hexadecimal            = impl::manipulator_flags<0, impl::flags::hexadecimal>;
+
+/**
+ * @brief Allow single-quoted string
+ */
+using single_quote              = impl::manipulator_flags<impl::flags::single_quote, 0>;
+
+/**
+ * @brief Disallow single-quoted string
+ */
+using no_single_quote           = impl::manipulator_flags<0, impl::flags::single_quote>;
+
+/**
+ * @brief Allow multi line string escaped by "\"
+ */
+using multi_line_string         = impl::manipulator_flags<impl::flags::multi_line_string, 0>;
+
+/**
+ * @brief Disallow multi line string escaped by "\"
+ */
+using no_multi_line_string      = impl::manipulator_flags<0, impl::flags::multi_line_string>;
+
+/**
+ * @brief Allow trailing comma in arrays and objects
+ */
+using trailing_comma            = impl::manipulator_flags<impl::flags::trailing_comma, 0>;
+
+/**
+ * @brief Disallow trailing comma in arrays and objects
+ */
+using no_trailing_comma         = impl::manipulator_flags<0, impl::flags::trailing_comma>;
+
+/**
+ * @brief Allow unquoted keys in objects
+ */
+using unquoted_key              = impl::manipulator_flags<impl::flags::unquoted_key, 0>;
+
+/**
+ * @brief Disallow unquoted keys in objects
+ */
+using no_unquoted_key           = impl::manipulator_flags<0, impl::flags::unquoted_key>;
 
 /**
  * @brief Set ECMA-404 standard rules
  * @see https://www.json.org/
- * 
- * @return A JSON manipulator object
  */
-inline impl::manipulator ecma404()
-{
-  return impl::manipulator(0, impl::flags::all_rules, false);
-}
+using ecma404                   = impl::manipulator_flags<0, impl::flags::all_rules>;
 
 /**
  * @brief Set JSON5 rules
  * @see https://json5.org/
- * 
- * @return A JSON manipulator object
  */
-inline impl::manipulator json5()
-{
-  return impl::manipulator(impl::flags::json5_rules, impl::flags::all_rules, false);
-}
+using json5                     = impl::manipulator_flags<impl::flags::json5_rules, 0>;
 
 /**
- * @brief Disable indent
- * 
- * @return A JSON manipulator object
+ * @brief Parse as finished(closed) JSON
  */
-inline impl::manipulator no_indent()
-{
-  return impl::manipulator(0, 0, true, 0);
-}
+using finished                  = impl::manipulator_flags<impl::flags::finished, 0>;
 
 /**
- * @brief Enable indent with tab "\t" character
- * 
- * @param tabs A number of tab characters for one level (default:1)
- * @return A JSON manipulator object
+ * @brief Parse as streaming(non-closed) JSON
  */
-inline impl::manipulator tab_indent(std::uint8_t tabs = 1)
-{
-  return impl::manipulator(0, 0, true, -tabs);
-}
-
-/**
- * @brief Enable indent with space " " character
- * 
- * @param tabs A number of space characters for one level (default:2)
- * @return A JSON manipulator object
- */
-inline impl::manipulator space_indent(std::uint8_t spaces = 2)
-{
-  return impl::manipulator(0, 0, true, spaces);
-}
+using streaming                 = impl::manipulator_flags<0, impl::flags::finished>;
 
 /**
  * @brief Use LF as newline code (when indent enabled)
- * 
- * @return A JSON manipulator object
  */
-inline impl::manipulator lf_newline()
-{
-  return impl::manipulator(impl::flags::crlf_newline, false);
-}
+using lf_newline                = impl::manipulator_flags<0, impl::flags::crlf_newline>;
 
 /**
  * @brief Use CR+LF as newline code (when indent enabled)
- * 
- * @return A JSON manipulator object
  */
-inline impl::manipulator crlf_newline()
-{
-  return impl::manipulator(impl::flags::crlf_newline, true);
-}
+using crlf_newline              = impl::manipulator_flags<impl::flags::crlf_newline, 0>;
 
 /**
- * @brief Parse as finished (closed) JSON
- * 
- * @return A JSON manipulator object
+ * @brief Disable indent
  */
-inline impl::manipulator finished()
-{
-  return impl::manipulator(impl::flags::finished, true);
-}
+using no_indent                 = impl::manipulator_indent<0>;
+
+/**
+ * @brief Enable indent with tab "\t" character
+ */
+template <impl::indent_type I = 1>
+using tab_indent                = impl::manipulator_indent<-I>;
+
+/**
+ * @brief Enable indent with space " " character
+ */
+template <impl::indent_type I = 2>
+using space_indent              = impl::manipulator_indent<I>;
 
 } /* namespace rule */
 
@@ -1707,8 +1898,13 @@ inline impl::manipulator finished()
  */
 inline value parse(std::istream& istream, bool finished = true)
 {
+  using namespace impl;
   value v;
-  (impl::parse_context<void>(istream) >> rule::ecma404()).parse(v, finished);
+  if (finished) {
+    parser<flags::finished>(istream) >> v;
+  } else {
+    parser<0>(istream) >> v;
+  }
   return v;
 }
 
@@ -1733,8 +1929,13 @@ inline value parse(const value::json_type& string)
  */
 inline value parse5(std::istream& istream, bool finished = true)
 {
+  using namespace impl;
   value v;
-  (impl::parse_context<void>(istream) >> rule::json5()).parse(v, finished);
+  if (finished) {
+    parser<flags::json5_rules|flags::finished>(istream) >> v;
+  } else {
+    parser<flags::json5_rules>(istream) >> v;
+  }
   return v;
 }
 
@@ -1748,6 +1949,64 @@ inline value parse5(const value::json_type& string)
 {
   std::istringstream istream(string);
   return parse5(istream, true);
+}
+
+/**
+ * @brief Stringify value (ECMA-404 standard)
+ * 
+ * @tparam T A list of typenames of manipulators
+ * @param v A value to stringify
+ * @param args A list of manipulators
+ * @return JSON string
+ */
+template <class... T>
+value::json_type stringify(const value& v, T... args)
+{
+  std::ostringstream ostream;
+  impl::flow_stringifier(ostream << rule::ecma404(), args..., v);
+  return ostream.str();
+}
+
+/**
+ * @brief Stringify value (JSON5)
+ * 
+ * @tparam T A list of typenames of manipulators
+ * @param v A value to stringify
+ * @param args A list of manipulators
+ * @return JSON string
+ */
+template <class... T>
+value::json_type stringify5(const value& v, T... args)
+{
+  std::ostringstream ostream;
+  impl::flow_stringifier(ostream << rule::json5(), args..., v);
+  return ostream.str();
+}
+
+/**
+ * @brief Stringify value (ECMA-404 standard)
+ * 
+ * @tparam T A list of typenames of manipulators
+ * @param args A list of manipulators
+ * @return JSON string
+ */
+template <class... T>
+value::json_type value::stringify(T... args) const
+{
+  return json5pp::stringify(*this, args...);
+}
+
+/**
+ * @brief Stringify value (JSON5)
+ * 
+ * @tparam T A list of typenames of manipulators
+ * @param args A list of manipulators
+ * @return JSON string
+ */
+template <class... T>
+value::json_type value::stringify5(T... args) const
+{
+  return json5pp::stringify5(*this, args...);
 }
 
 } /* namespace json5pp */

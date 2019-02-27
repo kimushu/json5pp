@@ -1,7 +1,7 @@
 # json5pp
-JSON (ECMA-404 and JSON5) parser &amp; stringifier for C++11.
+JSON (ECMA-404 and JSON5) parser &amp; stringifier written in **C++11**.
 
-## Features
+# Features
 
 * Easy to embed to your project. Only single file `json5pp.hpp` required.
 * Parse [standard JSON (ECMA-404)](https://www.json.org/) from `std::istream` or `std::string`.
@@ -9,127 +9,239 @@ JSON (ECMA-404 and JSON5) parser &amp; stringifier for C++11.
 * Stringify to `std::ostream` or `std::string` as standard JSON.
 * Stringify to `std::ostream` or `std::string` as JSON5.
 
-## Requirements
+# Requirements
 
 * Compilers with C++11 support
 
-## License
+# License
 
 * MIT license
 
-## APIs
+# API
 
-### Types
-* values
-  * `json5pp::value::base`
-    * An abstract base class of value which is represented in JSON.
-  * `json5pp::value::ptr`
-    * A shared pointer holds value which is represented in JSON.
-    * Definition: `using json5pp::value::ptr = std::shared_ptr<json5pp::value::base>;`
-* policies
-  * `json5pp::policy::ecma404`
-    * A class defines rules for [standard JSON (ECMA-404)](https://www.json.org/).
-  * `json5pp::policy::json5`
-    * A class defines rules for [JSON5](https://json5.org/).
-* indentation
-  * `json5pp::indent::spaces<N>`
-    * A template class specifies an indent with spaces(`' '`) for stringifiers.
-    * Template parameter `N` defines a number of spaces for one level.
-  * `json5pp::indent::tab`
-    * A template class specifies an indent with one tab(`'\t'`) for stringifiers.
-
-### Functions
-
-* parse
-  * `json5pp::parse<P>(std::istream& in, const bool finish = true)`
-    * Parse JSON from an input stream.
-    * Template parameter `P` specifies parsing rule. If omitted, rules for standard JSON will be used.
-    * `finish` indicates that the stream should be finished after JSON data.
-      * If `true`, parse will fail when junk data after JSON value. This is the default.
-      * If `false`, parse will succeed after reading the first JSON value. This is useful for reading JSON as streaming data.
-    * Returns `json5pp::value::ptr`
-  * `json5pp::parse<P>(const std::string& str)`
-    * Parse JSON from a string.
-    * Returns `json5pp::value::ptr`
-  * `json5pp::parse5(std::istream& in, const bool finish = true)`
-    * Parse JSON5 from an input stream.
-    * About `finish` parameter, see description for `json5pp::parse<P>(std::istream& in, ...)`
-    * Returns `json5pp::value::ptr`
-  * `json5pp::parse5(const std::string& str)`
-    * Parse JSON5 from a string.
-    * Returns `json5pp::value::ptr`
-* stringify
-  * `json5pp::base::stringify<P>()`
-    * Stringify value to JSON as a string without indents.
-    * Template parameter `P` specifies stringify rule. If omitted, rules for standard JSON will be used.
-    * Returns `std::string`
-  * `json5pp::base::stringify_to<P>(std::ostream& out)`
-    * Stringify value to JSON via an output stream without indents.
-    * Returns `void`
-  * `json5pp::base::stringify<P, I>(const I& indent)`
-    * Stringify value to JSON as a string with indents specified by `indent`.
-    * Returns `std::string`
-  * `json5pp::base::stringify_to<P, I>(std::ostream& out, const I& indent)`
-    * Stringify value to JSON via an output stream with indents specified by `indent`.
-    * Returns `void`
-  * `json5pp::base::stringify5()`
-    * Stringify value to JSON5 as a string without indents.
-    * Returns `std::string`
-  * `json5pp::base::stringify5_to(std::ostream& out)`
-    * Stringify value to JSON5 via an output stream without indents.
-    * Returns `void`
-  * `json5pp::base::stringify5<I>(const I& indent)`
-    * Stringify value to JSON5 as a string with indents specified by `indent`.
-    * Returns `std::string`
-  * `json5pp::base::stringify5_to<I>(std::ostream& out, const I& indent)`
-    * Stringify value to JSON5 via an output stream with indents specified by `indent`.
-    * Returns `void`
-
-## Examples
+## JSON value type
 
 ```cpp
-#include <string>
-#include <fstream>
-#include "json5pp.hpp"
-
-void load_from_json(const std::string& filename)
-{
-  std::ifstream f(filename);
-  auto value = json5pp::parse(f);
-  // :
-}
-
-void load_from_json5(const std::string& filename)
-{
-  std::ifstream f(filename);
-  auto value = json5pp::parse5(f);
-  // :
-}
-
-void save_to_json(const json5pp::value::base& value, const std::string& filename)
-{
-  std::ofstream f(filename);
-  value.stringify_to(f);
-}
-
-void save_to_json5(const json5pp::value::base& value, const std::string& filename)
-{
-  std::ofstream f(filename);
-  value.stringify5_to(f);
-}
-
-void save_to_json_with_indents(const json5pp::value::base& value, const std::string& filename)
-{
-  std::ofstream f(filename);
-  value.stringify_to(f, json5pp::indent::spaces<2>());
-}
-
-void save_to_json5_with_indents(const json5pp::value::base& value, const std::string& filename)
-{
-  std::ofstream f(filename);
-  value.stringify5_to(f, json5pp::indent::spaces<2>());
+namespace json5pp {
+  class value {
+  };
 }
 ```
+* The class holds a value which is represented in JSON.
+* This class can hold all types in JSON:
+  * `null`
+  * boolean (`true` / `false`)
+  * number
+  * string
+  * array (stored as `std::vector<json5pp::value>`)
+  * object (stored as `std::map<std::string, json5pp::value>`)
+* Provides type check with `is_xxx()` method. (`xxx` is one of `null`, `boolean`, `number`, `string`, `array` and `object`)
+* Provides explicit cast to C++ type with `as_xxx()` method. (`xxx` is one of `null`, `boolean`, `number`, `integer`, `string`, `array` and `object`)
+  * If cast failed, throws `std::bad_cast`
+* Accepts implicit cast (by overload of `operator=`) from C++ type (`nullptr_t`, `bool`, `double` | `int`, `std::string` | `const char*`)
+
+## Parse functions
+
+```cpp
+namespace json5pp {
+  value parse(const std::string& str);
+}
+```
+* Parse given string.
+* String must be a valid JSON (ECMA-404 standard)
+  * If not valid, throws `json5pp::syntax_error`.
+* String must be a finished (closed) JSON.
+  * i.e. If there are any junk data (except for spaces) after JSON, throws `json5pp::syntax_error`.
+
+```cpp
+namespace json5pp {
+  value parse(std::istream& istream, bool finish = true)
+}
+```
+* Parse JSON from given input stream.
+* Stream must have a valid JSON (ECMA-404 standard).
+  * If not valid, throws `json5pp::syntax_error`.
+* If `finish` is true, stream must be closed by eof after JSON.
+
+```cpp
+namespace json5pp {
+  value parse5(const std::string& str);
+}
+```
+* JSON5 version of `parse(const std::string&)`
+
+```cpp
+namespace json5pp {
+  value parse5(std::istream& istream, bool finish = true);
+}
+```
+* JSON5 version of `parse(std::istream&, bool)`
+
+## Stringify functions
+
+```cpp
+namespace json5pp {
+  class value {
+    template <class... T>
+    std::string stringify(T... manip);
+  };
+}
+```
+* Stringify value to ECMA-404 standard JSON.
+* About `T... manip`, see [iostream overloads and manipulators](#iostream-API-and-manipulators)
+
+```cpp
+namespace json5pp {
+  class value {
+    template <class... T>
+    std::string stringify5(T... manip);
+  };
+}
+```
+* Stringify value to JSON5.
+* About `T... manip`, see [iostream overloads and manipulators](#iostream-API-and-manipulators)
+
+```cpp
+namespace json5pp {
+  template <class... T>
+  std::string stringify(const value& v, T... manip);
+}
+```
+* Global method version of `json5pp::value::stringify()`
+* Same as `v.stringify(manip...)`
+
+```cpp
+namespace json5pp {
+  template <class... T>
+  std::string stringify5(const value& v, T... manip);
+}
+```
+* Global method version of `json5pp::value::stringify5()`
+* Same as `v.stringify5(manip...)`
+
+## iostream API
+
+### Parse by `operator>>`
+```cpp
+std::istream& istream = ...;
+json5pp::value v;
+istream >> v;
+```
+
+### Parse by `operator>>` with manipulators
+```cpp
+std::istream& istream = ...;
+json5pp::value v;
+istream >> json5pp::rule::json5() >> v; // Parse as JSON5
+```
+
+### Stringify by `operator<<`
+```cpp
+std::ostream& ostream = ...;
+const json5pp::value& v = ...;
+ostream << v;
+```
+
+### Stringify by `operator<<` with manipulators
+```cpp
+std::ostream& ostream = ...;
+const json5pp::value& v = ...;
+ostream << json5pp::rule::tab_indent<1>() << v;   // Stringify with tab indent
+ostream << json5pp::rule::space_indent<2>() << v; // Stringify with 2-space indent
+```
+
+## Manipulators
+
+### Comments
+* `json5pp::rule::single_line_comment()`
+* `json5pp::rule::no_single_line_comment()`
+  * Allow/disallow single line comment starts with `//`
+* `json5pp::rule::multi_line_comment()`
+* `json5pp::rule::no_multi_line_comment()`
+  * Allow/disallow multiple line comment starts with `/*` and ends with `*/`
+* `json5pp::rule::comments()`
+* `json5pp::rule::no_comments()`
+  * Combination of `single_line_comment` and `multi_line_comment`
+
+### Numbers
+* `json5pp::rule::explicit_plus_sign()`
+* `json5pp::rule::no_explicit_plus_sign()`
+  * Allow/disallow explicit plus sign (`+`) before non-negative number (ex: `+123`)
+* `json5pp::rule::leading_decimal_point()`
+* `json5pp::rule::no_leading_decimal_point()`
+  * Allow/disallow leading decimal point before number (ex: `.123`)
+* `json5pp::rule::trailing_decimal_point()`
+* `json5pp::rule::no_trailing_decimal_point()`
+  * Allow/disallow trailing decimal point after number (ex: `123.`)
+* `json5pp::rule::decimal_points()`
+* `json5pp::rule::no_decimal_points()`
+  * Combination of `leading_decimal_point` and `trailing_decimal_point`
+* `json5pp::rule::infinity_number()`
+* `json5pp::rule::no_infinity_number()`
+  * Allow/disallow infinity number
+* `json5pp::rule::not_a_number()`
+* `json5pp::rule::no_not_a_number()`
+  * Allow/disallow NaN
+* `json5pp::rule::hexadecimal()`
+* `json5pp::rule::no_hexadecimal()`
+  * Allow/disallow hexadecimal number (ex: `0x123`)
+
+### Strings
+* `json5pp::rule::single_quote()`
+* `json5pp::rule::no_single_quote()`
+  * Allow/disallow single quoted string (ex: `'foobar'`)
+* `json5pp::rule::multi_line_string()`
+* `json5pp::rule::no_multi_line_string()`
+  * Allow/disallow multiple line string escaped by `\`
+  * Example:
+    ```json
+    "test\
+    2nd line"
+    ```
+
+### Arrays and objects
+* `json5pp::rule::trailing_comma()`
+* `json5pp::rule::no_trailing_comma()`
+  * Allow/disallow trailing comma at the end of arrays or objects.
+  * Example for arrays: `[1,2,3,]`
+  * Example for objects: `{"a":123,}`
+
+### Objects
+* `json5pp::rule::unquoted_key()`
+* `json5pp::rule::no_unquoted_key()`
+  * Allow/disallow unquoted keys in objects. (ex: `{a:123}`)
+
+### Rule sets
+* `json5pp::rule::ecma404()`
+  * ECMA-404 standard rule set.
+* `json5pp::rule::json5()`
+  * JSON5 rule set.
+
+### Parse options
+* `json5pp::rule::finished()`
+  * Parse as finished (closed) JSON. If any junk data follows after JSON, parse fails.
+  * Opposite to `json5pp::rule::streaming()`
+* `json5pp::rule::streaming()`
+  * Parse as non-finished (non-closed) JSON. Parse will succeed at the end of JSON.
+  * Opposite to `json5pp::rule::finished()`
+
+### Stringify options
+* `json5pp::rule::lf_newline()`
+  * When indent is enabled, use LF(`\n`) as new-line code.
+  * Opposite to `json5pp::rule::crlf_newline`
+* `json5pp::rule::crlf_newline()`
+  * When indent is enabled, use CR+LF(`\r\n`) as new-line code.
+  * Opposite to `json5pp::rule::lf_newline`
+* `json5pp::rule::no_indent()`
+  * Disable indent. All arrays and objects will be stringified as one-line.
+* `json5pp::rule::tab_indent<L>()`
+  * Enable indent with tab character(s).
+  * `L` means a number of tab (`\t`) characters for one-level indent.
+  * If `L` is omitted, treat as `L=1`.
+* `json5pp::rule::space_indent<L>()`
+  * Enable indent with space character(s).
+  * `L` means a number of space (` `) characters for one-level indent.
+  * If `L` is omitted, treat as `L=2`.
 
 ## Limitation
 
@@ -139,4 +251,3 @@ void save_to_json5_with_indents(const json5pp::value::base& value, const std::st
 ## ToDo
 
 * More tests
-* Add support `operator <<` for stringify
