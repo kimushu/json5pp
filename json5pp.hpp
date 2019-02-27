@@ -19,7 +19,7 @@ namespace json5pp {
 namespace version {
   static constexpr auto major = 2;
   static constexpr auto minor = 0;
-  static constexpr auto patch = 0;
+  static constexpr auto patch = 1;
 }
 
 /**
@@ -1031,7 +1031,7 @@ private:
           if (no_digit) {
             throw syntax_error(ch, context);
           }
-          v = (double)(negative ? -int_part : int_part);
+          v = negative ? (double)(-(long long)int_part) : (double)int_part;
           return;
         }
         break;
