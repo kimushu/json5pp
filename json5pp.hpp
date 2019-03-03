@@ -18,8 +18,8 @@ namespace json5pp {
  */
 namespace version {
   static constexpr auto major = 2;
-  static constexpr auto minor = 0;
-  static constexpr auto patch = 1;
+  static constexpr auto minor = 1;
+  static constexpr auto patch = 0;
 }
 
 /**
@@ -137,6 +137,7 @@ public:
   using number_type = double;
   using number_i_type = int;
   using string_type = std::string;
+  using string_p_type = const char*;
   using array_type = std::vector<value>;
   using object_type = std::map<string_type, value>;
   using pair_type = object_type::value_type;
@@ -188,7 +189,7 @@ public:
    * @brief JSON value constructor for "string" type. (const char* version)
    * @param string A string value to be set.
    */
-  value(const char *string) : type(TYPE_STRING)
+  value(string_p_type string) : type(TYPE_STRING)
   {
     new(&content.string) string_type(string);
   }
@@ -464,6 +465,91 @@ public:
   }
 
   /*================================================================================
+   * Truthy/falsy test
+   */
+  operator bool() const
+  {
+    switch (type) {
+    case TYPE_BOOLEAN:
+      return content.boolean;
+    case TYPE_NUMBER:
+      return (content.number != 0) && (!std::isnan(content.number));
+    case TYPE_STRING:
+      return !content.string.empty();
+    case TYPE_ARRAY:
+    case TYPE_OBJECT:
+      return true;
+    case TYPE_NULL:
+    default:
+      return false;
+    }
+  }
+
+  /*================================================================================
+   * Array indexer
+   */
+  const value& at(const int index, const value& default_value) const
+  {
+    if (type == TYPE_ARRAY) {
+      if ((0 <= index) && (index < (int)content.array.size())) {
+        return content.array[index];
+      }
+    }
+    return default_value;
+  }
+
+  const value& at(const int index) const
+  {
+    static const value null;
+    return at(index, null);
+  }
+
+  const value& operator[](const int index) const
+  {
+    return at(index);
+  }
+
+  /*================================================================================
+   * Object indexer
+   */
+  const value& at(const string_type& key, const value& default_value) const
+  {
+    if (type == TYPE_OBJECT) {
+      auto iter = content.object.find(key);
+      if (iter != content.object.end()) {
+        return iter->second;
+      }
+    }
+    return default_value;
+  }
+
+  const value& at(const string_type& key) const
+  {
+    static const value null;
+    return at(key, null);
+  }
+
+  const value& operator[](const string_type& key) const
+  {
+    return at(key);
+  }
+
+  const value& at(const string_p_type key, const value& default_value) const
+  {
+    return at(string_type(key), default_value);
+  }
+
+  const value& at(const string_p_type key) const
+  {
+    return at(string_type(key));
+  }
+
+  const value& operator[](const string_p_type key) const
+  {
+    return at(string_type(key));
+  }
+
+  /*================================================================================
    * Assignment (Copying)
    */
 public:
@@ -471,7 +557,7 @@ public:
    * @brief Copy from another JSON value object.
    * @param src A value object.
    */
-  value& operator =(const value& src)
+  value& operator=(const value& src)
   {
     release(src.type);
     switch (type) {
@@ -500,7 +586,7 @@ public:
    * @brief Assign null value.
    * @param null A dummy value.
    */
-  value& operator =(null_type null)
+  value& operator=(null_type null)
   {
     release();
     return *this;
@@ -510,7 +596,7 @@ public:
    * @brief Assign boolean value.
    * @param boolean A boolean value to be set.
    */
-  value& operator =(boolean_type boolean)
+  value& operator=(boolean_type boolean)
   {
     release(TYPE_BOOLEAN);
     new (&content.boolean) boolean_type(boolean);
@@ -521,7 +607,7 @@ public:
    * @brief Assign number value.
    * @param number A number to be set.
    */
-  value& operator =(number_type number)
+  value& operator=(number_type number)
   {
     release(TYPE_NUMBER);
     new (&content.number) number_type(number);
@@ -532,7 +618,7 @@ public:
    * @brief Assign number value by integer type.
    * @param number A integer number to be set.
    */
-  value& operator =(number_i_type number)
+  value& operator=(number_i_type number)
   {
     release(TYPE_NUMBER);
     new (&content.number) number_type(number);
@@ -543,7 +629,7 @@ public:
    * @brief Assign string value.
    * @param string A string to be set.
    */
-  value& operator =(const string_type& string)
+  value& operator=(const string_type& string)
   {
     if (type == TYPE_STRING) {
       content.string = string;
@@ -558,16 +644,16 @@ public:
    * @brief Assign string value from const char*
    * @param string A string to be set.
    */
-  value& operator =(const char* string)
+  value& operator=(string_p_type string)
   {
-    return (*this = std::string(string));
+    return (*this = string_type(string));
   }
 
   /**
    * @brief Assign array value by deep copy.
    * @param array An array to be set.
    */
-  value& operator =(std::initializer_list<value> array)
+  value& operator=(std::initializer_list<value> array)
   {
     if (type == TYPE_ARRAY) {
       content.array = array;
@@ -582,7 +668,7 @@ public:
    * @brief Assign object value by deep copy.
    * @param object An object to be set.
    */
-  value& operator =(std::initializer_list<value::pair_type> elements)
+  value& operator=(std::initializer_list<value::pair_type> elements)
   {
     if (type == TYPE_OBJECT) {
       content.object = elements;
