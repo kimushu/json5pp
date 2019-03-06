@@ -39,6 +39,7 @@ namespace json5pp {
 * Provides explicit cast to C++ type with `as_xxx()` method. (`xxx` is one of `null`, `boolean`, `number`, `integer`, `string`, `array` and `object`)
   * If cast failed, throws `std::bad_cast`
 * Accepts implicit cast (by overload of `operator=`) from C++ type (`nullptr_t`, `bool`, `double` | `int`, `std::string` | `const char*`)
+* See [examples](#Examples) for details
 
 ## Parse functions
 
@@ -242,6 +243,285 @@ ostream << json5pp::rule::space_indent<2>() << v; // Stringify with 2-space inde
   * Enable indent with space character(s).
   * `L` means a number of space (` `) characters for one-level indent.
   * If `L` is omitted, treat as `L=2`.
+
+## Examples
+
+### Constructing `value` object
+
+```cpp
+using namespace std;
+
+// Construct "null" value
+json5pp::value a;               // Default constructor
+cout << a.is_null() << endl;    // => 1
+cout << a << endl;              // => null
+
+json5pp::value b(nullptr);      // Constructor with std::nullptr_t argument
+cout << b.is_null() << endl;    // => 1
+cout << b << endl;              // => null
+
+// json5pp::value c(NULL);      // Compile error
+                                // NULL cannot be used instead of nullptr
+
+// Construct boolean value
+json5pp::value d(true);         // Constructor with bool argument
+cout << d.is_boolean() << endl; // => 1
+cout << d << endl;              // => true
+
+// Construct number value
+json5pp::value e(123.45);       // Constructor with double argument
+cout << e.is_number() << endl;  // => 1
+cout << e << endl;              // => 123.45
+
+json5pp::value f(789);          // Constructor with int argument
+cout << f.is_number() << endl;  // => 1
+cout << f << endl;              // => 789
+
+// Construct string value
+std::string str("foo");
+json5pp::value g(str);          // Constructor with const std::string& argument
+cout << g.is_string() << endl;  // => 1
+cout << g << endl;              // => "foo"
+
+json5pp::value h("bar");        // Constructor with const char* argument
+cout << h.is_string() << endl;  // => 1
+cout << h << endl;              // => "bar"
+
+// Construct array value
+json5pp::value i {1, false, "baz", nullptr};
+                                // Construct with std::initializer_list
+cout << i.is_array() << endl;   // => 1
+cout << i << endl;              // => [1,false,"baz",null]
+
+auto j = json5pp::array({1, false, "baz", nullptr});
+                                // Construct with utility function: json5pp::array()
+cout << j.is_array() << endl;   // => 1
+cout << j << endl;              // => [1,false,"baz",null]
+
+// json5pp::value k {{"foo", 123}};
+                                // Compile error (*1)
+
+// Construct object value
+auto m = json5pp::object({{"bar", 123}, {"foo", "baz"}});
+                                // Construct with utility function: json5pp::object()
+cout << m.is_object() << endl;  // => 1
+cout << m << endl;              // => {"bar":123,"foo":"baz"}
+
+// json5pp::value n{{"foo", 123}};
+                                // Compile error (*1)
+
+// (*1)
+// These forms are rejected because an implicit conversion
+// for arrays and objects makes ambiguousness, for example:
+// json5pp::value x{{"foo", 123}};  // Ambiguous!
+//                                  // candidate: [["foo",123]]
+//                                  // candidate: {"foo":123}
+//
+// Use utility functions (json5pp::array(),json5pp::object()) to remove
+// ambiguousness.
+```
+
+### Changing `value` object
+```cpp
+using namespace std;
+
+json5pp::value x;       // Default constructor makes null value
+cout << x << endl;      // => null
+x = false;              // Assign boolean with bool value
+cout << x << endl;      // => false
+x = 123.45;             // Assign number with double value
+cout << x << endl;      // => 123.45
+x = 789;                // Assign number with int value
+cout << x << endl;      // => 789
+std::string str("bar");
+x = str;                // Assign string with const std::string& value
+cout << x << endl;      // => "bar"
+                        // Because assignment copies the content of string,
+                        // changing a source string does not affect `x`:
+str += "123";
+cout << x << endl;      // => "bar" (Contents does NOT change)
+x = "foo";              // Assign string with const char* value
+cout << x << endl;      // => "foo"
+x = nullptr;            // Assign null with nullptr_t value
+cout << x << endl;      // => null
+
+x = json5pp::array({1});// Assign array with utility function: json5pp::array()
+cout << x << endl;      // => [1]
+
+auto& a = x.as_array(); // You can get container object by as_array() method
+                        // decltype(a) => std::vector<json5pp::value>&
+a.push_back("foo");     // Add value at the end of array
+cout << x << endl;      // => [1,"foo"]
+
+x = json5pp::object({{"foo","bar"}});
+                        // Assign object with utility function: json5pp::object()
+cout << x << endl;      // => {"foo":"bar"}
+
+// Note: Do not access `a` (array container) after replacing the content of `x`
+//       with a new object.
+
+auto& o = x.as_object();// You can get container object by as_object() method
+                        // decltype(o) => std::map<std::string, json5pp::value>&
+                        // Note: Do not forget `&` when you use `auto` keyword!
+o.emplace("baz", 123);  // Add value with key "baz"
+cout << x << endl;      // => {"baz":123,"foo":"bar"}
+
+json5pp::value y;
+y = x;                  // You can copy the value by "=" operator
+cout << y << endl;      // => {"baz":123,"foo":"bar"}
+
+                        // Because assignment arrays/objects is a deep copy,
+                        // changing a source value `x` does not affect `y`:
+o.erase("foo");         // Remove key "foo" from the content of `x` object
+cout << x << endl;      // => {"baz":123}
+cout << y << endl;      // => {"baz":123,"foo":"bar"} (Contents does NOT change)
+```
+
+### Accessing `value` object
+```cpp
+using namespace std;
+
+// Access boolean (See also: Truthy/falsy tests)
+json5pp::value a(true);
+auto a_value = a.as_boolean();    // decltype(a_value) => bool
+cout << a_value << endl;          // => 1
+
+// Access number
+json5pp::value b(123.45);
+auto b_value1 = b.as_number();    // decltype(b_value1) => double
+cout << b_value1 << endl;         // => 123.45
+auto b_value2 = b.as_integer();   // decltype(b_value2) => int
+cout << b_value2 << endl;         // => 123
+
+// Access string
+json5pp::value c("foo");
+auto c_value = c.as_string();     // decltype(c_value) => std::string
+cout << c_value << endl;          // => foo
+
+// Access array
+json5pp::value d{1, "foo", false};
+auto& d_value = d.as_array();     // decltype(d_value) => std::vector<json5pp::value>&
+cout << d_value.size() << endl;           // => 3
+cout << d_value[0].as_number() << endl;   // => 1
+cout << d_value[1].as_string() << endl;   // => foo
+cout << d_value[2].as_boolean() << endl;  // => 0
+
+// Access array with indexer
+cout << d[0].as_number() << endl;         // => 1
+cout << d[1].as_string() << endl;         // => foo
+cout << d[2].as_boolean() << endl;        // => 0
+// d[1] = 123;                            // Compile error (indexer is read-only)
+
+// Access object
+auto e = json5pp::object({{"bar", 123}, {"foo", true}});
+auto& e_value = e.as_object();    // decltype(e_value) => std::map<std::string, json5pp::value>&
+cout << e_value.size() << endl;                 // => 2
+cout << e_value.at("bar").as_number() << endl;  // => 123
+cout << e_value.at("foo").as_boolean() << endl; // => 1
+
+// Access object with indexer
+cout << e["bar"].as_number() << endl;     // => 123
+cout << e["foo"].as_boolean() << endl;    // => 1
+// e["baz"] = 123;                        // Compile error (indexer is read-only)
+
+// Invalid cast
+// (If type does not match, as_xxx() method throws std::bad_cast())
+json5pp::value f(123);    // type is number
+// f.as_null();           // throws std::bad_cast()
+json5pp::value g();       // type is null
+// f.as_boolean();        // throws std::bad_cast()
+
+// Truthy/falsy test
+// falsy: null, false, 0, -0, NaN, ""
+// truthy: other values
+json5pp::value truthy1(true);
+json5pp::value truthy2(1);
+json5pp::value truthy3("foo");
+json5pp::value truthy4{};
+auto truthy5 = json5pp::object({});
+cout << (bool)truthy1 << endl;  // => 1
+cout << (bool)truthy2 << endl;  // => 1
+cout << (bool)truthy3 << endl;  // => 1
+cout << (bool)truthy4 << endl;  // => 1
+cout << (bool)truthy5 << endl;  // => 1
+
+json5pp::value falsy1();        // null
+json5pp::value falsy2(false);
+json5pp::value falsy3(0);
+json5pp::value falsy4(numeric_limits<double>::quiet_NaN());     // NaN
+json5pp::value falsy5(numeric_limits<double>::signaling_NaN()); // NaN
+json5pp::value falsy6("");
+cout << (bool)falsy1 << endl;  // => 0
+cout << (bool)falsy2 << endl;  // => 0
+cout << (bool)falsy3 << endl;  // => 0
+cout << (bool)falsy4 << endl;  // => 0
+cout << (bool)falsy5 << endl;  // => 0
+cout << (bool)falsy6 << endl;  // => 0
+```
+
+### Parse
+```cpp
+using namespace std;
+
+auto x = json5pp::parse("{\"foo\":[123,\"baz\"]}");
+cout << x.is_object() << endl;            // => 1
+cout << x["foo"].is_array() << endl;      // => 1
+cout << x["foo"][0].as_number() << endl;  // => 123
+cout << x["foo"][1].as_string() << endl;  // => baz
+
+auto y = json5pp::parse5("{\"foo\"://this is comment\n[123,\"baz\"/*trailing comma-->*/,],}");
+cout << y.is_object() << endl;            // => 1
+cout << y["foo"].is_array() << endl;      // => 1
+cout << y["foo"][0].as_number() << endl;  // => 123
+cout << y["foo"][1].as_string() << endl;  // => baz
+```
+
+### Stringify
+```cpp
+using namespace std;
+
+// Make some example object...
+json5pp::value x = json5pp::object({
+  {"foo", 123},
+  {"bar",
+    json5pp::array({
+      1, "baz", true,
+    })
+  },
+});
+
+// Stringify to output stream by "<<" operator
+cout << x << endl;
+
+// Stringify to std::string by stringify() method
+auto s = x.stringify(); // decltype(s) => std::string
+cout << s << endl;      // => {"bar":[1,"baz",true],"foo":123}
+
+// Stringify to output stream with indent specification
+cout << json5pp::rule::space_indent<>() << x << endl; /* =>
+{
+  "bar": [
+    1,
+    "baz",
+    true
+  ],
+  "foo": 123
+}
+*/
+
+// Stringify to std::string with indent specification
+auto s2 = x.stringify(json5pp::rule::tab_indent<>());
+cout << s2 << endl; /* =>
+{
+>       "bar": [
+>       >       1,
+>       >       "baz",
+>       >       true,
+>       ],
+>       "foo": 123
+}
+(`>` means tab) */
+```
 
 ## Limitation
 
