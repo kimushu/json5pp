@@ -1,6 +1,6 @@
 TARGET = json5pp-test
 CXX = g++
-CXXFLAGS = -I.. -std=c++11 -s -O2
+CXXFLAGS = -I.. -std=c++11 -s -O2 -pthread
 TIMEOUT = 5
 
 ifeq ($(OS),Windows_NT)

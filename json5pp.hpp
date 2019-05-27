@@ -1316,7 +1316,7 @@ private:
       } else if (ch != ',') {
         throw syntax_error(ch, context);
       } else if (has_flag(trailing_comma)) {
-        ch = istream.get();
+        ch = skip_spaces();
         if (ch == ']') {
           break;
         }
@@ -1380,7 +1380,7 @@ private:
       } else if (ch != ',') {
         throw syntax_error(ch, context);
       } else if (has_flag(flags::trailing_comma)) {
-        ch = istream.get();
+        ch = skip_spaces();
         if (ch == '}') {
           break;
         }
