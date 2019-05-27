@@ -19,7 +19,7 @@ namespace json5pp {
 namespace version {
   static constexpr auto major = 2;
   static constexpr auto minor = 1;
-  static constexpr auto patch = 0;
+  static constexpr auto patch = 1;
 }
 
 /**
