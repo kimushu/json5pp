@@ -129,13 +129,15 @@ private:
     TYPE_STRING,
     TYPE_ARRAY,
     TYPE_OBJECT,
+    TYPE_INTEGER,
   } type;
 
 public:
   using null_type = std::nullptr_t;
   using boolean_type = bool;
   using number_type = double;
-  using number_i_type = int;
+  using integer_type = int;
+  using number_i_type = integer_type;
   using string_type = std::string;
   using string_p_type = const char*;
   using array_type = std::vector<value>;
@@ -174,7 +176,7 @@ public:
    * @brief JSON value constructor with integer for "number" type.
    * @param number An integer value to be set.
    */
-  value(number_i_type number) noexcept : type(TYPE_NUMBER), content(number) {}
+  value(integer_type integer) noexcept : type(TYPE_INTEGER), content(integer) {}
 
   /**
    * @brief JSON value constructor for "string" type.
@@ -234,6 +236,9 @@ public:
     case TYPE_NUMBER:
       new (&content.number) number_type(std::move(src.content.number));
       break;
+    case TYPE_INTEGER:
+      new (&content.integer) integer_type(std::move(src.content.integer));
+      break;
     case TYPE_STRING:
       new (&content.string) string_type(std::move(src.content.string));
       break;
@@ -279,6 +284,9 @@ private:
     case TYPE_NUMBER:
       content.number.~number_type();
       break;
+    case TYPE_INTEGER:
+      content.integer.~integer_type();
+      break;
     case TYPE_STRING:
       content.string.~string_type();
       break;
@@ -309,9 +317,14 @@ public:
   bool is_boolean() const noexcept { return type == TYPE_BOOLEAN; }
 
   /**
-   * @brief Check if type of stored value is number.
+   * @brief Check if type of stored value is number (includes integer).
    */
-  bool is_number() const noexcept { return type == TYPE_NUMBER; }
+  bool is_number() const noexcept { return (type == TYPE_NUMBER) || (type == TYPE_INTEGER); }
+
+  /**
+   * @brief Check if type of stored value is integer.
+   */
+  bool is_integer() const noexcept { return type == TYPE_INTEGER; }
 
   /**
    * @brief Check if type of stored value is string.
@@ -355,47 +368,33 @@ public:
   }
 
   /**
-   * @brief Cast to boolean reference
-   * 
-   * @throws std::bad_cast if the value is not a boolean
-   */
-  boolean_type& as_boolean()
-  {
-    if (type != TYPE_BOOLEAN) { throw std::bad_cast(); }
-    return content.boolean;
-  }
-
-  /**
    * @brief Cast to number
    * 
-   * @throws std::bad_cast if the value is not a number
+   * @throws std::bad_cast if the value is not a number nor integer
    */
   number_type as_number() const
   {
-    if (type != TYPE_NUMBER) { throw std::bad_cast(); }
-    return content.number;
-  }
-
-  /**
-   * @brief Cast to number reference
-   * 
-   * @throws std::bad_cast if the value is not a number
-   */
-  number_type& as_number()
-  {
-    if (type != TYPE_NUMBER) { throw std::bad_cast(); }
+    if (type == TYPE_INTEGER) {
+      return static_cast<number_type>(content.integer);
+    } else if (type != TYPE_NUMBER) {
+      throw std::bad_cast();
+    }
     return content.number;
   }
 
   /**
    * @brief Cast to integer number
    * 
-   * @throws std::bad_cast if the value is not a number
+   * @throws std::bad_cast if the value is not a number nor integer
    */
-  number_i_type as_integer() const
+  integer_type as_integer() const
   {
-    if (type != TYPE_NUMBER) { throw std::bad_cast(); }
-    return static_cast<number_i_type>(content.number);
+    if (type == TYPE_NUMBER) {
+      return static_cast<integer_type>(content.number);
+    } else if (type != TYPE_INTEGER) {
+      throw std::bad_cast();
+    }
+    return content.integer;
   }
 
   /**
@@ -474,6 +473,8 @@ public:
       return content.boolean;
     case TYPE_NUMBER:
       return (content.number != 0) && (!std::isnan(content.number));
+    case TYPE_INTEGER:
+      return (content.integer != 0);
     case TYPE_STRING:
       return !content.string.empty();
     case TYPE_ARRAY:
@@ -567,6 +568,9 @@ public:
     case TYPE_NUMBER:
       new (&content.number) number_type(src.content.number);
       break;
+    case TYPE_INTEGER:
+      new (&content.integer) integer_type(src.content.integer);
+      break;
     case TYPE_STRING:
       new (&content.string) string_type(src.content.string);
       break;
@@ -616,12 +620,12 @@ public:
 
   /**
    * @brief Assign number value by integer type.
-   * @param number A integer number to be set.
+   * @param integer A integer number to be set.
    */
-  value& operator=(number_i_type number)
+  value& operator=(integer_type integer)
   {
-    release(TYPE_NUMBER);
-    new (&content.number) number_type(number);
+    release(TYPE_INTEGER);
+    new (&content.integer) integer_type(integer);
     return *this;
   }
 
@@ -710,13 +714,14 @@ private:
   union content {
     boolean_type boolean;
     number_type number;
+    integer_type integer;
     string_type string;
     array_type array;
     object_type object;
     content() {}
     content(boolean_type boolean) : boolean(boolean) {}
     content(number_type number) : number(number) {}
-    content(number_i_type number) : number(number) {}
+    content(integer_type integer) : integer(integer) {}
     ~content() {}
   } content;
 };
@@ -1180,6 +1185,21 @@ private:
       }
     }
     istream.unget();
+    if ((frac_part == 0) && (exp_part == 0)) {
+      if (negative) {
+        const auto integer_value = static_cast<value::integer_type>(-int_part);
+        if (static_cast<decltype(int_part)>(integer_value) == -int_part) {
+          v = integer_value;
+          return;
+        }
+      } else {
+        const auto integer_value = static_cast<value::integer_type>(int_part);
+        if (static_cast<decltype(int_part)>(integer_value) == int_part) {
+          v = integer_value;
+          return;
+        }
+      }
+    }
     double number_value = (double)int_part;
     if (frac_part > 0) {
       number_value += (frac_part * std::pow(10, -frac_divs));
@@ -1580,6 +1600,9 @@ private:
       } else {
         ostream << v.content.number;
       }
+      break;
+    case value::TYPE_INTEGER:
+      ostream << v.content.integer;
       break;
     case value::TYPE_STRING:
       stringify_string(v.content.string);
