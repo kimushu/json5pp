@@ -9,6 +9,7 @@
 #include <initializer_list>
 #include <cmath>
 #include <limits>
+#include <streambuf>
 
 namespace json5pp {
 
@@ -1779,6 +1780,25 @@ static void flow_stringifier(S& stringifier)
 {
 }
 
+class membuf : public std::streambuf
+{
+public:
+  explicit membuf(const void* data, std::size_t size)
+  {
+    const auto p = reinterpret_cast<char*>(const_cast<void*>(data));
+    setg(p, p, p + size);
+  }
+};
+
+class imemstream : public std::istream
+{
+public:
+  explicit imemstream(const void* data, std::size_t size)
+  : buf(data, size), std::istream(&buf) {}
+private:
+  membuf buf;
+};
+
 } /* namespace impl */
 
 /**
@@ -2030,6 +2050,19 @@ inline value parse(const value::json_type& string)
 }
 
 /**
+ * @brief Parse string as JSON (ECMA-404 standard)
+ * 
+ * @param pointer A pointer to string to be parsed
+ * @param length Length of string (in bytes)
+ * @return JSON value
+ */
+inline value parse(const void* pointer, std::size_t length)
+{
+  impl::imemstream istream(pointer, length);
+  return parse(istream, true);
+}
+
+/**
  * @brief Parse string as JSON (JSON5)
  * 
  * @param istream An input stream
@@ -2057,6 +2090,19 @@ inline value parse5(std::istream& istream, bool finished = true)
 inline value parse5(const value::json_type& string)
 {
   std::istringstream istream(string);
+  return parse5(istream, true);
+}
+
+/**
+ * @brief Parse string as JSON (JSON5)
+ * 
+ * @param pointer A pointer to string to be parsed
+ * @param length Length of string (in bytes)
+ * @return JSON value
+ */
+inline value parse5(const void* pointer, std::size_t length)
+{
+  impl::imemstream istream(pointer, length);
   return parse5(istream, true);
 }
 
