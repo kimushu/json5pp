@@ -26,7 +26,7 @@ clean:
 	$(Q)rm -f $(LOG)
 
 BUILD = $(CXX) -o $@ $(CXXFLAGS) -DTIMEOUT=$(TIMEOUT) $(filter %.cpp,$^)
-ESC := $(shell echo -ne "\e")
+ESC := $(shell printf "\e")
 COLORIZE = sed -e "s/\[PASS\]/$(ESC)[32m&$(ESC)[0m/" -e "s/\[FAIL\]/$(ESC)[31m&$(ESC)[0m/"
 
 output/fail.$(SUFFIX): fail.cpp $(DUT)
