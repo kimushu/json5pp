@@ -60,7 +60,7 @@ $(LOG): output/fail.$(SUFFIX) output/fail5.$(SUFFIX) $(filter %.json,$(CASES)) \
 	for x in $(filter input/fail5_%.json,$^); do \
 		./output/fail5.$(SUFFIX) $$x | tee -a $@ | $(COLORIZE); \
 	done; \
-	for x in $(filter output/%.$(SUFFIX),$^); do \
+	for x in $(filter-out output/fail%,$(filter output/%.$(SUFFIX),$^)); do \
 		n=$${x##*/}; j=$${n%.*}.json; c=compare/$$j; \
 		unset o; test -f $$c && o=output/$$j; \
 		./$$x input/$$j $$o | tee -a $@ | $(COLORIZE); \
