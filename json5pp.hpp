@@ -39,7 +39,7 @@ public:
   : std::invalid_argument(
       std::string("JSON syntax error: ") +
       (ch != std::char_traits<char>::eof() ?
-        "illegal character `" + std::string(1, ch) + "'" :
+        "illegal character `" + std::string(1, static_cast<char>(ch)) + "'" :
         "unexpected EOS") +
       " in " + context_name) {}
 };
@@ -1203,7 +1203,7 @@ private:
     }
     double number_value = (double)int_part;
     if (frac_part > 0) {
-      number_value += (frac_part * std::pow(10, -frac_divs));
+      number_value += (static_cast<double>(frac_part) * std::pow(10, -frac_divs));
     }
     if (exp_part > 0) {
       number_value *= std::pow(10, exp_negative ? -exp_part : +exp_part);
@@ -1268,7 +1268,7 @@ private:
               if (n < 0) {
                 throw syntax_error(ch, context);
               }
-              code = (code << 4) + n;
+              code = static_cast<char16_t>((code << 4) + n);
             }
             if (code < 0x80) {
               buffer.append(1, (char)code);
@@ -2008,7 +2008,7 @@ using no_indent                 = impl::manipulator_indent<0>;
  * @brief Enable indent with tab "\t" character
  */
 template <impl::indent_type I = 1>
-using tab_indent                = impl::manipulator_indent<-I>;
+using tab_indent                = impl::manipulator_indent<static_cast<impl::indent_type>(-I)>;
 
 /**
  * @brief Enable indent with space " " character
