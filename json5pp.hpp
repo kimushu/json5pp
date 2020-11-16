@@ -1794,7 +1794,7 @@ class imemstream : public std::istream
 {
 public:
   explicit imemstream(const void* data, std::size_t size)
-  : buf(data, size), std::istream(&buf) {}
+  : std::istream(&buf), buf(data, size) {}
 private:
   membuf buf;
 };
