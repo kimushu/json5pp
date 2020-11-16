@@ -738,7 +738,7 @@ inline value array(std::initializer_list<value> elements)
   value v;
   v.release(value::TYPE_ARRAY);
   new (&v.content.array) value::array_type(elements);
-  return std::move(v);
+  return v;
 }
 
 /**
@@ -752,7 +752,7 @@ inline value object(std::initializer_list<value::pair_type> elements)
   value v;
   v.release(value::TYPE_OBJECT);
   new (&v.content.object) value::object_type(elements);
-  return std::move(v);
+  return v;
 }
 
 namespace impl {
