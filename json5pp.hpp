@@ -10,6 +10,7 @@
 #include <cmath>
 #include <limits>
 #include <streambuf>
+#include <cstdint>
 
 namespace json5pp {
 
